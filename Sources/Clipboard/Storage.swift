@@ -48,8 +48,8 @@ final class ClipPersistence {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init() {
-        fileURL = AppPaths.root.appendingPathComponent("clips.json")
+    init(filename: String = "clips.json") {
+        fileURL = AppPaths.root.appendingPathComponent(filename)
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601

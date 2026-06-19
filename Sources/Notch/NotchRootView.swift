@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct NotchRootView: View {
     @ObservedObject var model: NotchViewModel
     @ObservedObject var store: ClipStore
+    @ObservedObject var shelf: ShelfStore
     @ObservedObject var music: MusicManager
 
     /// Device-pure black so the panel is indistinguishable from the hardware
@@ -102,6 +103,19 @@ struct NotchRootView: View {
                 onTogglePin: { store.setPinned(!$0.isPinned, for: $0.id) },
                 onDelete: { store.remove($0.id) }
             )
+        case .shelf:
+            CardStripView(
+                items: shelf.items,
+                emptyTitle: "Drag files here to stage them",
+                emptySymbol: "tray.and.arrow.down",
+                onPick: { _ in model.dismiss() },
+                onTogglePin: { _ in },
+                onDelete: { shelf.remove($0.id) }
+            )
+            .onDrop(of: [.fileURL, .url, .image, .plainText, .text], isTargeted: nil) { providers in
+                DropImporter.importProviders(providers, add: { shelf.add($0) })
+                return true
+            }
         case .music:
             NowPlayingDetailView(music: music)
         }

@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var quickSearchController: QuickSearchWindowController?
     private var musicManager: MusicManager?
     private var mediaKeyTap: MediaKeyTap?
+    private var shelfStore: ShelfStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Start the Sparkle updater (no-op until a feed + key are configured).
@@ -29,7 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         musicManager.start()
         self.musicManager = musicManager
 
-        let notchController = NotchWindowController(store: clipStore, music: musicManager)
+        // Shelf: a staging tray for dragged-in files/items.
+        let shelfStore = ShelfStore()
+        self.shelfStore = shelfStore
+
+        let notchController = NotchWindowController(store: clipStore, shelf: shelfStore, music: musicManager)
         notchController.show()
         self.notchController = notchController
 

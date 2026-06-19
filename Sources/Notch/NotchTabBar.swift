@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Segmented tab selector for the expanded notch. The selection pill slides
-/// between tabs via `matchedGeometryEffect` for a fluid, "alive" transition.
+/// Segmented tab selector for the expanded notch. Only the selected tab shows
+/// its label (others collapse to icons) so the bar fits beside the camera and
+/// scales to many modules. The selection pill slides via `matchedGeometryEffect`.
 struct NotchTabBar: View {
     @Binding var selection: NotchTab
     var musicActive: Bool
@@ -9,35 +10,39 @@ struct NotchTabBar: View {
     @Namespace private var namespace
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             ForEach(NotchTab.allCases) { tab in
                 tabButton(tab)
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, 24)
-        .padding(.trailing, 14)
+        .padding(.leading, 22)
+        .padding(.trailing, 12)
     }
 
     private func tabButton(_ tab: NotchTab) -> some View {
         let isSelected = selection == tab
         return Button {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
                 selection = tab
             }
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 9, weight: .semibold))
-                Text(tab.title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 13)
+                if isSelected {
+                    Text(tab.title)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .fixedSize()
+                }
                 if tab == .music && musicActive {
                     Circle().fill(.green).frame(width: 5, height: 5)
                 }
             }
-            .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4.5)
+            .foregroundStyle(isSelected ? .white : .white.opacity(0.42))
+            .padding(.horizontal, isSelected ? 11 : 7)
+            .padding(.vertical, 5)
             .background {
                 if isSelected {
                     Capsule(style: .continuous)

@@ -1,17 +1,23 @@
 import AppKit
 import UniformTypeIdentifiers
 
-/// Imports items dropped onto the notch (drag-in) into the clip store.
+/// Imports items dropped onto the notch (drag-in) and hands each off to `add`.
 enum DropImporter {
     @MainActor
-    static func importProviders(_ providers: [NSItemProvider], into store: ClipStore) {
+    static func importProviders(_ providers: [NSItemProvider], add: @escaping @MainActor (ClipItem) -> Void) {
         for provider in providers {
             Task {
                 if let item = await makeItem(from: provider) {
-                    store.add(item)
+                    add(item)
                 }
             }
         }
+    }
+
+    /// Convenience for the clipboard store.
+    @MainActor
+    static func importProviders(_ providers: [NSItemProvider], into store: ClipStore) {
+        importProviders(providers, add: { store.add($0) })
     }
 
     private static func makeItem(from provider: NSItemProvider) async -> ClipItem? {
