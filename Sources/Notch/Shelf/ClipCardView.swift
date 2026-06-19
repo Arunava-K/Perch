@@ -20,14 +20,16 @@ struct ClipCardView: View {
         Button(action: activate) {
             VStack(spacing: 0) {
                 preview
-                    .frame(width: cardSize.width, height: cardSize.height - footerHeight)
+                    .frame(width: cardSize.width,
+                           height: hasFooter ? cardSize.height - footerHeight : cardSize.height)
                     .clipped()
-                footer
+                if hasFooter { footer }
             }
             .frame(width: cardSize.width, height: cardSize.height)
             .background(Color.white.opacity(hovering ? 0.11 : 0.06))
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(alignment: .topTrailing) { pinBadge }
+            .overlay(alignment: .topLeading) { pinBadge }
+            .overlay(alignment: .topTrailing) { formatTag }
             .overlay { confirmOverlay }
             .scaleEffect(hovering ? 1.03 : 1)
             .animation(.spring(response: 0.28, dampingFraction: 0.7), value: hovering)
@@ -93,9 +95,44 @@ struct ClipCardView: View {
                 placeholder("photo")
             }
 
-        case .file(_, let path, _):
-            FileThumbnail(path: path, size: CGSize(width: 76, height: 76))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .file(_, let path, let displayName):
+            ZStack(alignment: .bottom) {
+                FileThumbnail(path: path, size: CGSize(width: 80, height: 80))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(displayName)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        LinearGradient(colors: [.black.opacity(0), .black.opacity(0.75)],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
+            }
+        }
+    }
+
+    private var hasFooter: Bool {
+        if case .file = item.kind { return false }
+        return true
+    }
+
+    /// File extension shown as a corner badge (e.g. PDF, PNG).
+    @ViewBuilder
+    private var formatTag: some View {
+        if case .file(_, let path, _) = item.kind {
+            let ext = (path as NSString).pathExtension.uppercased()
+            Text(ext.isEmpty ? "FILE" : ext)
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2.5)
+                .background(.black.opacity(0.5), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5))
+                .padding(6)
         }
     }
 
