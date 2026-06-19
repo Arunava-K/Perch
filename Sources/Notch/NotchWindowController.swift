@@ -11,13 +11,15 @@ final class NotchWindowController {
     private let model: NotchViewModel
     private let registry: ModuleRegistry
     private let music: MusicManager
+    private let timer: TimerEngine
     private var hoverTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
-    init(registry: ModuleRegistry, music: MusicManager) {
+    init(registry: ModuleRegistry, music: MusicManager, timer: TimerEngine) {
         self.model = NotchViewModel(metrics: .current())
         self.registry = registry
         self.music = music
+        self.timer = timer
     }
 
     func show() {
@@ -28,7 +30,7 @@ final class NotchWindowController {
             model?.interactiveRect ?? .zero
         }
 
-        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music))
+        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer))
         hosting.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosting)
         panel.contentView = container
@@ -57,6 +59,21 @@ final class NotchWindowController {
                 }
             }
             .store(in: &cancellables)
+
+        // Drive the collapsed live-timer flank from the running countdown.
+        timer.$isRunning
+            .removeDuplicates()
+            .sink { [weak self] running in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self?.model.isTimerActive = running
+                }
+            }
+            .store(in: &cancellables)
+
+        // Announce phase completions ("Break time", "Time's up") in the notch.
+        timer.onActivity = { [weak self] symbol, text in
+            self?.model.showMessage(symbol: symbol, text: text)
+        }
     }
 
     // MARK: Hover via cursor polling

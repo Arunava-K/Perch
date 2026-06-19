@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var musicManager: MusicManager?
     private var mediaKeyTap: MediaKeyTap?
     private var shelfStore: ShelfStore?
+    private var timerEngine: TimerEngine?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
 
@@ -36,16 +37,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let shelfStore = ShelfStore()
         self.shelfStore = shelfStore
 
+        // Timer / Pomodoro: drives the Timer tab + the collapsed live countdown.
+        let timerEngine = TimerEngine()
+        self.timerEngine = timerEngine
+
         // Register the notch modules (tab order = registration order).
         let registry = ModuleRegistry(modules: [
             ClipboardModule(store: clipStore),
             PinnedModule(store: clipStore),
             ShelfModule(shelf: shelfStore),
+            TimerModule(timer: timerEngine),
             MusicModule(music: musicManager),
         ])
         self.moduleRegistry = registry
 
-        let notchController = NotchWindowController(registry: registry, music: musicManager)
+        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine)
         notchController.show()
         self.notchController = notchController
 

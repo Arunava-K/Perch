@@ -340,7 +340,10 @@ tabs to icons, so it scales to many modules.
 ### Modules (each a tab and/or live activity)
 - ⚪ **Shelf polish** — AirDrop / Share action (`NSSharingServicePicker`),
   multi-select, hide the no-op Pin on shelf cards, "create zip".
-- ⚪ **Timers / Pomodoro** — countdown ring as a collapsed live activity.
+- 🟢 **Timers / Pomodoro** — Timer tab (Pomodoro cycle + 5/15/25/45m quick
+  presets, pause/resume/stop/skip) with a live countdown ring + remaining time
+  flanking the camera in the collapsed notch; phase changes announced via a
+  message peek; chimes on completion.
 - ⚪ **Calendar / Up Next** — EventKit agenda + a live activity counting down to
   the next event with a one-click join.
 - ⚪ **AI (Claude)** — ask Claude, summarize/transform the current clip, smart

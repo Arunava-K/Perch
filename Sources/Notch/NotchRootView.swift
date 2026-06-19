@@ -9,6 +9,8 @@ struct NotchRootView: View {
     /// Kept directly (not via a module) because it drives the *collapsed* idle
     /// media flank and the tab indicator.
     @ObservedObject var music: MusicManager
+    /// Drives the *collapsed* live countdown flank.
+    @ObservedObject var timer: TimerEngine
 
     @State private var dropTargeted = false
 
@@ -95,6 +97,11 @@ struct NotchRootView: View {
                 .padding(.top, model.metrics.notchSize.height)
                 .padding(.bottom, 8)
                 .transition(.opacity)
+        } else if model.isTimerActive {
+            // Idle: countdown ring + remaining time flanking the camera.
+            CollapsedTimerView(timer: timer)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
         } else if model.isMediaActive {
             // Idle: album art + equalizer flanking the camera (no top padding —
             // this occupies the notch-height region itself).
@@ -118,6 +125,8 @@ struct NotchRootView: View {
             ClipPeekView(item: item)
         case .hud(let symbol, let value):
             HUDPeekView(symbol: symbol, value: value)
+        case .message(let symbol, let text):
+            MessagePeekView(symbol: symbol, text: text)
         }
     }
 }

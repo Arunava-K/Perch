@@ -17,9 +17,12 @@ final class NotchViewModel: ObservableObject {
     enum PeekContent: Equatable {
         case clip(ClipItem)
         case hud(symbol: String, value: Double)  // value 0...1
+        case message(symbol: String, text: String)
     }
     /// True while a music player is active — the idle notch shows flanking media.
     @Published var isMediaActive = false
+    /// True while a countdown is running — the collapsed notch shows a live timer.
+    @Published var isTimerActive = false
     @Published var metrics: NotchMetrics
 
     /// Delay before collapsing after the cursor leaves, to avoid flicker when
@@ -61,6 +64,11 @@ final class NotchViewModel: ObservableObject {
         CGSize(width: metrics.notchSize.width + 96, height: metrics.notchSize.height)
     }
 
+    /// Live-timer size — countdown ring + remaining time flanking the camera.
+    var timerSize: CGSize {
+        CGSize(width: metrics.notchSize.width + 118, height: metrics.notchSize.height)
+    }
+
     /// The window is always sized to the largest state so content can animate
     /// inside it without resizing the window itself.
     var windowSize: CGSize {
@@ -70,6 +78,7 @@ final class NotchViewModel: ObservableObject {
     var currentNotchSize: CGSize {
         if isExpanded { return expandedSize }
         if isPeeking { return peekSize }
+        if isTimerActive { return timerSize }
         if isMediaActive { return collapsedMediaSize }
         return collapsedSize
     }
@@ -144,6 +153,12 @@ final class NotchViewModel: ObservableObject {
     func showHUD(symbol: String, value: Double) {
         post(LiveActivity(content: .hud(symbol: symbol, value: value),
                           duration: 1200, priority: 1, coalesceKey: "hud"))
+    }
+
+    /// Announce a short message in the collapsed notch (e.g. "Break time").
+    func showMessage(symbol: String, text: String) {
+        post(LiveActivity(content: .message(symbol: symbol, text: text),
+                          duration: 2400, priority: 2, coalesceKey: "message"))
     }
 
     private func post(_ activity: LiveActivity) {
