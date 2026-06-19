@@ -9,6 +9,15 @@ struct NotchRootView: View {
     @ObservedObject var shelf: ShelfStore
     @ObservedObject var music: MusicManager
 
+    @State private var dropTargeted = false
+
+    private func switchToShelf() {
+        guard model.selectedTab != .shelf else { return }
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            model.selectedTab = .shelf
+        }
+    }
+
     /// Device-pure black so the panel is indistinguishable from the hardware
     /// notch / bezel. Any tint or translucency makes the camera housing stand
     /// out against it.
@@ -62,6 +71,22 @@ struct NotchRootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.bottom, 12)
+            // A drag anywhere over the open notch always targets the Shelf.
+            .overlay {
+                if dropTargeted {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [7]))
+                        .padding(7)
+                }
+            }
+            .onDrop(of: [.fileURL, .url, .image, .plainText, .text], isTargeted: $dropTargeted) { providers in
+                DropImporter.importProviders(providers, add: { shelf.add($0) })
+                switchToShelf()
+                return true
+            }
+            .onChange(of: dropTargeted) { _, targeted in
+                if targeted { switchToShelf() }
+            }
             .transition(.blurFade)
         } else if model.isPeeking, let peek = model.peekContent {
             peekView(peek)
@@ -90,10 +115,6 @@ struct NotchRootView: View {
                 onTogglePin: { store.setPinned(!$0.isPinned, for: $0.id) },
                 onDelete: { store.remove($0.id) }
             )
-            .onDrop(of: [.fileURL, .url, .image, .plainText, .text], isTargeted: nil) { providers in
-                DropImporter.importProviders(providers, into: store)
-                return true
-            }
         case .pinned:
             CardStripView(
                 items: store.items.filter { $0.isPinned },
@@ -112,10 +133,6 @@ struct NotchRootView: View {
                 onTogglePin: { _ in },
                 onDelete: { shelf.remove($0.id) }
             )
-            .onDrop(of: [.fileURL, .url, .image, .plainText, .text], isTargeted: nil) { providers in
-                DropImporter.importProviders(providers, add: { shelf.add($0) })
-                return true
-            }
         case .music:
             NowPlayingDetailView(music: music)
         }
