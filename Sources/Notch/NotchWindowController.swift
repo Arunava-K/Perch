@@ -9,16 +9,14 @@ final class NotchWindowController {
     private var panel: NotchPanel?
     private var container: NotchContainerView?
     private let model: NotchViewModel
-    private let store: ClipStore
-    private let shelf: ShelfStore
+    private let registry: ModuleRegistry
     private let music: MusicManager
     private var hoverTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
-    init(store: ClipStore, shelf: ShelfStore, music: MusicManager) {
+    init(registry: ModuleRegistry, music: MusicManager) {
         self.model = NotchViewModel(metrics: .current())
-        self.store = store
-        self.shelf = shelf
+        self.registry = registry
         self.music = music
     }
 
@@ -30,7 +28,7 @@ final class NotchWindowController {
             model?.interactiveRect ?? .zero
         }
 
-        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, store: store, shelf: shelf, music: music))
+        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music))
         hosting.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosting)
         panel.contentView = container

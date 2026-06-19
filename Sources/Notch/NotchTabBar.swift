@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// Segmented tab selector for the expanded notch. Only the selected tab shows
-/// its label (others collapse to icons) so the bar fits beside the camera and
-/// scales to many modules. The selection pill slides via `matchedGeometryEffect`.
+/// Segmented tab selector driven by the module registry. Only the selected tab
+/// shows its label (others collapse to icons) so the bar fits beside the camera
+/// and scales to many modules. The pill slides via `matchedGeometryEffect`.
 struct NotchTabBar: View {
-    @Binding var selection: NotchTab
-    var musicActive: Bool
+    let modules: [any NotchModule]
+    @Binding var selectedID: String
 
     @Namespace private var namespace
 
     var body: some View {
         HStack(spacing: 3) {
-            ForEach(NotchTab.allCases) { tab in
-                tabButton(tab)
+            ForEach(modules, id: \.id) { module in
+                tabButton(module)
             }
             Spacer(minLength: 0)
         }
@@ -20,23 +20,23 @@ struct NotchTabBar: View {
         .padding(.trailing, 12)
     }
 
-    private func tabButton(_ tab: NotchTab) -> some View {
-        let isSelected = selection == tab
+    private func tabButton(_ module: any NotchModule) -> some View {
+        let isSelected = selectedID == module.id
         return Button {
             withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-                selection = tab
+                selectedID = module.id
             }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: tab.icon)
+                Image(systemName: module.icon)
                     .font(.system(size: 10, weight: .semibold))
                     .frame(width: 13)
                 if isSelected {
-                    Text(tab.title)
+                    Text(module.title)
                         .font(.system(size: 11.5, weight: .semibold))
                         .fixedSize()
                 }
-                if tab == .music && musicActive {
+                if module.indicator {
                     Circle().fill(.green).frame(width: 5, height: 5)
                 }
             }

@@ -5,16 +5,17 @@ import UniformTypeIdentifiers
 /// hangs from the very top edge of the screen.
 struct NotchRootView: View {
     @ObservedObject var model: NotchViewModel
-    @ObservedObject var store: ClipStore
-    @ObservedObject var shelf: ShelfStore
+    @ObservedObject var registry: ModuleRegistry
+    /// Kept directly (not via a module) because it drives the *collapsed* idle
+    /// media flank and the tab indicator.
     @ObservedObject var music: MusicManager
 
     @State private var dropTargeted = false
 
-    private func switchToShelf() {
-        guard model.selectedTab != .shelf else { return }
+    private func routeDropToModule() {
+        guard let drop = registry.dropModule, registry.selectedID != drop.id else { return }
         withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-            model.selectedTab = .shelf
+            registry.select(drop.id)
         }
     }
 
@@ -60,7 +61,7 @@ struct NotchRootView: View {
         if model.isExpanded {
             VStack(alignment: .leading, spacing: 0) {
                 // Tabs sit in the top-left "ear", beside the camera.
-                NotchTabBar(selection: $model.selectedTab, musicActive: music.hasActivePlayer)
+                NotchTabBar(modules: registry.modules, selectedID: $registry.selectedID)
                     .frame(height: 26)
                     .padding(.top, 7)
                 // Full-width content must clear the camera notch, then fill the
@@ -71,7 +72,7 @@ struct NotchRootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.bottom, 12)
-            // A drag anywhere over the open notch always targets the Shelf.
+            // A drag anywhere over the open notch routes to the drop module (Shelf).
             .overlay {
                 if dropTargeted {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -80,12 +81,12 @@ struct NotchRootView: View {
                 }
             }
             .onDrop(of: [.fileURL, .url, .image, .plainText, .text], isTargeted: $dropTargeted) { providers in
-                DropImporter.importProviders(providers, add: { shelf.add($0) })
-                switchToShelf()
+                registry.dropModule?.handleDrop(providers)
+                routeDropToModule()
                 return true
             }
             .onChange(of: dropTargeted) { _, targeted in
-                if targeted { switchToShelf() }
+                if targeted { routeDropToModule() }
             }
             .transition(.blurFade)
         } else if model.isPeeking, let peek = model.peekContent {
@@ -105,36 +106,8 @@ struct NotchRootView: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        switch model.selectedTab {
-        case .clipboard:
-            CardStripView(
-                items: store.items,
-                emptyTitle: "No clips yet — copy something",
-                emptySymbol: "tray",
-                onPick: { _ in model.dismiss() },
-                onTogglePin: { store.setPinned(!$0.isPinned, for: $0.id) },
-                onDelete: { store.remove($0.id) }
-            )
-        case .pinned:
-            CardStripView(
-                items: store.items.filter { $0.isPinned },
-                emptyTitle: "Pin clips to keep them here",
-                emptySymbol: "pin",
-                onPick: { _ in model.dismiss() },
-                onTogglePin: { store.setPinned(!$0.isPinned, for: $0.id) },
-                onDelete: { store.remove($0.id) }
-            )
-        case .shelf:
-            CardStripView(
-                items: shelf.items,
-                emptyTitle: "Drag files here to stage them",
-                emptySymbol: "tray.and.arrow.down",
-                onPick: { _ in model.dismiss() },
-                onTogglePin: { _ in },
-                onDelete: { shelf.remove($0.id) }
-            )
-        case .music:
-            NowPlayingDetailView(music: music)
+        if let module = registry.selected {
+            module.makeContent(ModuleContext(dismiss: { model.dismiss() }))
         }
     }
 

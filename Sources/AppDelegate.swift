@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var musicManager: MusicManager?
     private var mediaKeyTap: MediaKeyTap?
     private var shelfStore: ShelfStore?
+    private var moduleRegistry: ModuleRegistry?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Start the Sparkle updater (no-op until a feed + key are configured).
@@ -34,7 +35,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let shelfStore = ShelfStore()
         self.shelfStore = shelfStore
 
-        let notchController = NotchWindowController(store: clipStore, shelf: shelfStore, music: musicManager)
+        // Register the notch modules (tab order = registration order).
+        let registry = ModuleRegistry(modules: [
+            ClipboardModule(store: clipStore),
+            PinnedModule(store: clipStore),
+            ShelfModule(shelf: shelfStore),
+            MusicModule(music: musicManager),
+        ])
+        self.moduleRegistry = registry
+
+        let notchController = NotchWindowController(registry: registry, music: musicManager)
         notchController.show()
         self.notchController = notchController
 

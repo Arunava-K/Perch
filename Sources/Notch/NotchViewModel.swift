@@ -20,8 +20,6 @@ final class NotchViewModel: ObservableObject {
     }
     /// True while a music player is active — the idle notch shows flanking media.
     @Published var isMediaActive = false
-    /// Selected tab in the expanded notch.
-    @Published var selectedTab: NotchTab = .clipboard
     @Published var metrics: NotchMetrics
 
     /// Delay before collapsing after the cursor leaves, to avoid flicker when
