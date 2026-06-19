@@ -97,6 +97,14 @@ final class NotificationMonitor {
 
     private func poll() {
         guard let queue = makeConnection() else { return }  // fresh snapshot each poll
+
+        // If Notification Center cleared its table, rec_ids reset below our
+        // tracker — resync so we don't go blind to every new notification.
+        let currentMax = (try? queue.read { db in
+            try Int64.fetchOne(db, sql: "SELECT COALESCE(MAX(rec_id), 0) FROM record") ?? 0
+        }) ?? 0
+        if currentMax < lastRecID { lastRecID = currentMax }
+
         let rows = (try? queue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT record.rec_id AS rec_id, record.data AS data, app.identifier AS identifier
