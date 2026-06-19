@@ -6,13 +6,16 @@ import SwiftUI
 /// can take focus, then back to `.accessory` when it closes.
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
-    static let shared = SettingsWindowController()
-
+    private let registry: ModuleRegistry
     private var window: NSWindow?
+
+    init(registry: ModuleRegistry) {
+        self.registry = registry
+    }
 
     func show() {
         if window == nil {
-            let hosting = NSHostingController(rootView: SettingsView())
+            let hosting = NSHostingController(rootView: SettingsView(registry: registry))
             let window = NSWindow(contentViewController: hosting)
             window.title = "Mybar Settings"
             window.styleMask = [.titled, .closable, .miniaturizable]

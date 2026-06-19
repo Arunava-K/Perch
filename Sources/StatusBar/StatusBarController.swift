@@ -7,15 +7,18 @@ final class StatusBarController {
     private var statusItem: NSStatusItem?
     private let onToggleNotch: () -> Void
     private let onOpenLibrary: () -> Void
+    private let onOpenSettings: () -> Void
     private let onClearHistory: () -> Void
 
     init(
         onToggleNotch: @escaping () -> Void,
         onOpenLibrary: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void,
         onClearHistory: @escaping () -> Void
     ) {
         self.onToggleNotch = onToggleNotch
         self.onOpenLibrary = onOpenLibrary
+        self.onOpenSettings = onOpenSettings
         self.onClearHistory = onClearHistory
         setup()
     }
@@ -80,7 +83,7 @@ final class StatusBarController {
     }
 
     @objc private func openSettings() {
-        SettingsWindowController.shared.show()
+        onOpenSettings()
     }
 
     @objc private func clearHistory() {

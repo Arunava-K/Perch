@@ -23,4 +23,12 @@ extension Defaults.Keys {
 
     /// Whether we've shown the Accessibility prompt at least once.
     static let didPromptAccessibility = Key<Bool>("didPromptAccessibility", default: false)
+
+    // MARK: Modules / tabs
+
+    /// Module ids in display order (empty = registration order).
+    static let moduleOrder = Key<[String]>("moduleOrder", default: [])
+
+    /// Module ids the user has hidden.
+    static let disabledModules = Key<[String]>("disabledModules", default: [])
 }

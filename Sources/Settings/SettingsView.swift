@@ -4,6 +4,8 @@ import KeyboardShortcuts
 
 /// Settings: general behavior, history limits, shortcuts, permissions, about.
 struct SettingsView: View {
+    @ObservedObject var registry: ModuleRegistry
+
     @Default(.openNotchOnHover) private var openNotchOnHover
     @Default(.historyLimit) private var historyLimit
     @Default(.historyMaxAgeDays) private var historyMaxAgeDays
@@ -20,6 +22,32 @@ struct SettingsView: View {
                         LoginItem.setEnabled(newValue)
                     }
                 Toggle("Open notch on hover", isOn: $openNotchOnHover)
+            }
+
+            Section {
+                ForEach(registry.order, id: \.self) { id in
+                    if let module = registry.module(id) {
+                        HStack(spacing: 10) {
+                            Image(systemName: module.icon)
+                                .frame(width: 18)
+                                .foregroundStyle(.secondary)
+                            Text(module.title)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { registry.isEnabled(id) },
+                                set: { registry.setEnabled($0, id) }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+                .onMove { from, to in registry.move(from: from, to: to) }
+            } header: {
+                Text("Tabs")
+            } footer: {
+                Text("Drag to reorder; toggle to show or hide a tab in the notch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("History") {

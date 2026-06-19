@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mediaKeyTap: MediaKeyTap?
     private var shelfStore: ShelfStore?
     private var moduleRegistry: ModuleRegistry?
+    private var settingsController: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Start the Sparkle updater (no-op until a feed + key are configured).
@@ -73,12 +74,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let libraryController = LibraryWindowController(store: clipStore)
         self.libraryController = libraryController
 
+        let settingsController = SettingsWindowController(registry: registry)
+        self.settingsController = settingsController
+
         statusBarController = StatusBarController(
             onToggleNotch: { [weak notchController] in
                 notchController?.toggle()
             },
             onOpenLibrary: { [weak libraryController] in
                 libraryController?.show()
+            },
+            onOpenSettings: { [weak settingsController] in
+                settingsController?.show()
             },
             onClearHistory: { [weak clipStore] in
                 clipStore?.clear()
