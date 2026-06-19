@@ -41,7 +41,7 @@ struct CollapsedMediaView: View {
 
             Spacer(minLength: 0)
 
-            EqualizerView(isPlaying: music.isPlaying, maxHeight: 13)
+            EqualizerView(isPlaying: music.isPlaying, barColor: music.accentColor, maxHeight: 13)
                 .padding(.trailing, 18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -82,7 +82,8 @@ struct NowPlayingBar: View {
 
             HStack(spacing: 16) {
                 transportButton("backward.fill", size: 12) { music.previousTrack() }
-                transportButton(music.isPlaying ? "pause.fill" : "play.fill", size: 15) { music.togglePlayPause() }
+                transportButton(music.isPlaying ? "pause.fill" : "play.fill", size: 15,
+                                tint: music.accentColor) { music.togglePlayPause() }
                 transportButton("forward.fill", size: 12) { music.nextTrack() }
             }
         }
@@ -99,11 +100,12 @@ struct NowPlayingBar: View {
         }
     }
 
-    private func transportButton(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    private func transportButton(_ symbol: String, size: CGFloat, tint: Color = .white,
+                                 action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(tint)
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }

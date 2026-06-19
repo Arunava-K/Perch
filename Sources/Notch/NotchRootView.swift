@@ -96,7 +96,8 @@ struct NotchRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, model.metrics.notchSize.height)
                 .padding(.bottom, 8)
-                .transition(.opacity)
+                // Pop from the top so the peek reads as emerging from the notch.
+                .transition(.scale(scale: 0.86, anchor: .top).combined(with: .opacity))
         } else if model.isTimerActive {
             // Idle: countdown ring + remaining time flanking the camera.
             CollapsedTimerView(timer: timer)

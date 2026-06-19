@@ -31,8 +31,13 @@ final class NotchViewModel: ObservableObject {
     private var collapseTask: Task<Void, Never>?
     private var peekTask: Task<Void, Never>?
 
-    private let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8)
-    private let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0)
+    /// Lower damping gives a subtle overshoot so the notch visibly springs open
+    /// — it reads as content bulging *out of* the hardware notch.
+    private let openAnimation = Animation.spring(response: 0.40, dampingFraction: 0.68, blendDuration: 0.1)
+    /// Close is quicker and fully damped so it tucks away cleanly (no bounce).
+    private let closeAnimation = Animation.spring(response: 0.30, dampingFraction: 0.92)
+    /// Peek pop: a touch springier than open for a lively "emerge" feel.
+    private let peekAnimation = Animation.spring(response: 0.34, dampingFraction: 0.66)
 
     init(metrics: NotchMetrics) {
         self.metrics = metrics
@@ -187,7 +192,7 @@ final class NotchViewModel: ObservableObject {
     private func present(_ activity: LiveActivity) {
         currentActivity = activity
         peekContent = activity.content
-        withAnimation(openAnimation) { isPeeking = true }
+        withAnimation(peekAnimation) { isPeeking = true }
         peekTask?.cancel()
         peekTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(activity.duration))
@@ -220,6 +225,7 @@ final class NotchViewModel: ObservableObject {
         collapseTask = nil
         endPeek()
         guard !isExpanded else { return }
+        Haptics.tap()
         withAnimation(openAnimation) { isExpanded = true }
     }
 

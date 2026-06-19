@@ -222,6 +222,7 @@ struct ClipCardView: View {
 
     private func activate() {
         let outcome = PasteService.paste(item)
+        Haptics.tap()
         confirmLabel = outcome == .pasted ? "Pasted" : "Copied"
         withAnimation(.easeOut(duration: 0.15)) { confirm = true }
         Task {

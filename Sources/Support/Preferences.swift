@@ -10,6 +10,9 @@ extension Defaults.Keys {
     /// Seconds the cursor must dwell on the notch before it expands.
     static let minimumHoverDuration = Key<Double>("minimumHoverDuration", default: 0.0)
 
+    /// Subtle haptic feedback on notch expand and paste.
+    static let hapticFeedback = Key<Bool>("hapticFeedback", default: true)
+
     // MARK: Clipboard history
 
     /// Max number of unpinned clips to keep.

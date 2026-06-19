@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// Polls Apple Music and Spotify (via AppleScript) for now-playing state and
 /// exposes simple transport controls. Only queries apps that are already
@@ -10,6 +11,8 @@ final class MusicManager: ObservableObject {
     @Published private(set) var title = ""
     @Published private(set) var artist = ""
     @Published private(set) var artwork: NSImage?
+    /// Vivid color sampled from the current artwork, for accenting media UI.
+    @Published private(set) var accentColor: Color = .white
     @Published private(set) var activeApp: Player?
     @Published private(set) var elapsed: Double = 0
     @Published private(set) var duration: Double = 0
@@ -37,7 +40,17 @@ final class MusicManager: ObservableObject {
         art.lockFocus()
         NSGradient(colors: [.systemPink, .systemPurple])?.draw(in: NSRect(x: 0, y: 0, width: 100, height: 100), angle: -45)
         art.unlockFocus()
-        artwork = art
+        setArtwork(art)
+    }
+
+    /// Set the current artwork and derive its accent color.
+    private func setArtwork(_ image: NSImage?) {
+        artwork = image
+        if let image, let nsColor = image.accentColor() {
+            accentColor = Color(nsColor: nsColor)
+        } else {
+            accentColor = .white
+        }
     }
 
     func start() {
@@ -140,7 +153,7 @@ final class MusicManager: ObservableObject {
             Task { [weak self] in
                 if let (data, _) = try? await URLSession.shared.data(from: url),
                    let image = NSImage(data: data) {
-                    await MainActor.run { self?.artwork = image }
+                    await MainActor.run { self?.setArtwork(image) }
                 }
             }
         } else if urlString == nil {
@@ -148,7 +161,7 @@ final class MusicManager: ObservableObject {
             artworkURLString = nil
             if let app = NSRunningApplication.runningApplications(withBundleIdentifier: fallbackApp.bundleID).first,
                let icon = app.icon {
-                artwork = icon
+                setArtwork(icon)
             }
         }
     }

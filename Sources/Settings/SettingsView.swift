@@ -9,6 +9,7 @@ struct SettingsView: View {
     @ObservedObject var registry: ModuleRegistry
 
     @Default(.openNotchOnHover) private var openNotchOnHover
+    @Default(.hapticFeedback) private var hapticFeedback
     @Default(.historyLimit) private var historyLimit
     @Default(.historyMaxAgeDays) private var historyMaxAgeDays
     @Default(.skipSensitiveContent) private var skipSensitiveContent
@@ -26,6 +27,7 @@ struct SettingsView: View {
                         LoginItem.setEnabled(newValue)
                     }
                 Toggle("Open notch on hover", isOn: $openNotchOnHover)
+                Toggle("Haptic feedback", isOn: $hapticFeedback)
             }
 
             Section {
