@@ -329,13 +329,13 @@ tabs to icons, so it scales to many modules.
   Clean file/image cards with a corner format tag.
 
 ### Platform
-- ⚪ **`NotchModule` extraction** — formalize the tab/store/drop/live-activity
-  pattern into a registry so a module is one file + one registration, and
-  Settings auto-populates. *Extract from the Shelf while it's fresh.*
-- ⚪ **Live-activity queue** — generalize peek/HUD into a queue (copy peek,
-  volume HUD, timer, download progress, AirDrop received…) shown in the collapsed
-  notch, with priority + coalescing.
-- ⚪ **Tab management** — reorder / enable-disable tabs in Settings.
+- 🟢 **`NotchModule` extraction** — tabs are modules in a `ModuleRegistry`; adding
+  a feature is one module class + one registry entry. Registry owns selection +
+  drop routing.
+- 🟢 **Live-activity queue** — peeks/HUDs are queued (not clobbered) with
+  coalescing (volume updates in place) and priority (HUD preempts clip peek).
+- 🟢 **Tab management** — show/hide + drag-reorder tabs in Settings; order +
+  disabled set persisted in `Defaults`.
 
 ### Modules (each a tab and/or live activity)
 - ⚪ **Shelf polish** — AirDrop / Share action (`NSSharingServicePicker`),
