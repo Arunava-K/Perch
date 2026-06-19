@@ -318,6 +318,46 @@ swipe gestures, multi-display. (New tabs like Shelf/Calendar now slot in easily.
 
 ---
 
+## Superapp roadmap (post-1.0)
+
+Direction: the notch becomes a **platform** — every capability is a tab (when
+open) and/or a live activity (when collapsed). The tab bar collapses unselected
+tabs to icons, so it scales to many modules.
+
+### Done
+- 🟢 **Shelf** — drag-in file staging tray; any drag onto the notch opens it.
+  Clean file/image cards with a corner format tag.
+
+### Platform
+- ⚪ **`NotchModule` extraction** — formalize the tab/store/drop/live-activity
+  pattern into a registry so a module is one file + one registration, and
+  Settings auto-populates. *Extract from the Shelf while it's fresh.*
+- ⚪ **Live-activity queue** — generalize peek/HUD into a queue (copy peek,
+  volume HUD, timer, download progress, AirDrop received…) shown in the collapsed
+  notch, with priority + coalescing.
+- ⚪ **Tab management** — reorder / enable-disable tabs in Settings.
+
+### Modules (each a tab and/or live activity)
+- ⚪ **Shelf polish** — AirDrop / Share action (`NSSharingServicePicker`),
+  multi-select, hide the no-op Pin on shelf cards, "create zip".
+- ⚪ **Timers / Pomodoro** — countdown ring as a collapsed live activity.
+- ⚪ **Calendar / Up Next** — EventKit agenda + a live activity counting down to
+  the next event with a one-click join.
+- ⚪ **AI (Claude)** — ask Claude, summarize/transform the current clip, smart
+  paste, translate (Anthropic API). The key differentiator.
+- ⚪ **Weather**, **Battery & system stats**, **Webcam mirror**,
+  **Brightness HUD** (completes the HUD set), **Stocks/crypto ticker**.
+
+### Cross-cutting
+- ⚪ Real **Apple Music artwork** (different path than Spotify's URL).
+- ⚪ **Keyboard navigation** in the open notch (arrows + return to paste).
+- ⚪ **Inline snippets / text expansion** (`;sig` → expand).
+- ⚪ **Multi-display** support (one window/ViewModel per screen, UUID-tracked).
+- ⚪ **Onboarding** flow for first-run permissions.
+- ⚪ Cut a **signed + notarized** release (needs Developer ID + Sparkle key).
+
+---
+
 ## Reference
 
 boring.notch is cloned at `/tmp/boring.notch` for reference while building.
