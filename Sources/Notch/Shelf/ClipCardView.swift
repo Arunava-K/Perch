@@ -137,8 +137,9 @@ struct ClipCardView: View {
         case .file(_, let path, _):
             let ext = (path as NSString).pathExtension.uppercased()
             return ext.isEmpty ? "FILE" : ext
-        case .image(_, _, let width, let height):
-            return "\(width)×\(height)"
+        case .image:
+            // Captured image data is stored as PNG.
+            return "PNG"
         default:
             return nil
         }
