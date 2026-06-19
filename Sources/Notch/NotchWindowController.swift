@@ -125,9 +125,14 @@ final class NotchWindowController {
         model.showClipPeek(item)
     }
 
-    /// Show a system HUD (volume, etc.) in the collapsed notch.
+    /// Show a system HUD (volume, brightness) in the collapsed notch.
     func showHUD(symbol: String, value: Double) {
         model.showHUD(symbol: symbol, value: value)
+    }
+
+    /// Announce a short message in the collapsed notch (charging, Low Power, …).
+    func showMessage(symbol: String, text: String) {
+        model.showMessage(symbol: symbol, text: text)
     }
 
     /// Re-reads screen metrics and repositions. Call on screen changes.

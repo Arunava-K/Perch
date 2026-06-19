@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var quickSearchController: QuickSearchWindowController?
     private var musicManager: MusicManager?
     private var mediaKeyTap: MediaKeyTap?
+    private var powerMonitor: PowerMonitor?
     private var shelfStore: ShelfStore?
     private var timerEngine: TimerEngine?
     private var moduleRegistry: ModuleRegistry?
@@ -60,22 +61,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             notchController?.peek(item)
         }
 
-        // HUD replacement: intercept volume keys → adjust + show our own HUD.
+        // HUD replacement: intercept volume + brightness keys → adjust + show
+        // our own HUD. Brightness is only intercepted when we can actually set it.
         let mediaKeyTap = MediaKeyTap()
+        mediaKeyTap.handlesBrightness = BrightnessController.shared.isAvailable
         mediaKeyTap.onKey = { [weak notchController] key in
             switch key {
-            case .volumeUp: VolumeController.adjust(by: 1.0 / 16)
-            case .volumeDown: VolumeController.adjust(by: -1.0 / 16)
-            case .mute: VolumeController.toggleMute()
+            case .volumeUp, .volumeDown, .mute:
+                switch key {
+                case .volumeUp: VolumeController.adjust(by: 1.0 / 16)
+                case .volumeDown: VolumeController.adjust(by: -1.0 / 16)
+                case .mute: VolumeController.toggleMute()
+                default: break
+                }
+                let muted = VolumeController.isMuted()
+                let value = VolumeController.current()
+                let symbol = (muted || value == 0) ? "speaker.slash.fill"
+                    : value < 0.5 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"
+                notchController?.showHUD(symbol: symbol, value: muted ? 0 : value)
+
+            case .brightnessUp, .brightnessDown:
+                let delta = (key == .brightnessUp ? 1.0 : -1.0) / 16
+                let value = BrightnessController.shared.adjust(by: delta)
+                notchController?.showHUD(symbol: "sun.max.fill", value: value)
             }
-            let muted = VolumeController.isMuted()
-            let value = VolumeController.current()
-            let symbol = (muted || value == 0) ? "speaker.slash.fill"
-                : value < 0.5 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"
-            notchController?.showHUD(symbol: symbol, value: muted ? 0 : value)
         }
-        mediaKeyTap.start()
+        mediaKeyTap.startWithRetry()
         self.mediaKeyTap = mediaKeyTap
+
+        // Power live activities: charging, Low Power Mode, low battery.
+        let powerMonitor = PowerMonitor()
+        powerMonitor.onActivity = { [weak notchController] symbol, text in
+            notchController?.showMessage(symbol: symbol, text: text)
+        }
+        powerMonitor.start()
+        self.powerMonitor = powerMonitor
 
         let libraryController = LibraryWindowController(store: clipStore)
         self.libraryController = libraryController

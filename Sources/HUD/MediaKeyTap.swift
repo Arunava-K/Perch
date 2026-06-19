@@ -4,21 +4,48 @@ import AppKit
 /// own HUD instead of the system one. Requires Accessibility / Input Monitoring;
 /// if that's not granted, `start()` fails gracefully and the system HUD stays.
 final class MediaKeyTap {
-    enum Key { case volumeUp, volumeDown, mute }
+    enum Key { case volumeUp, volumeDown, mute, brightnessUp, brightnessDown }
 
     var onKey: ((Key) -> Void)?
 
+    /// When false, brightness keys pass through untouched (so the system HUD
+    /// still works on machines where we can't set brightness ourselves).
+    var handlesBrightness = false
+
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var retryTimer: Timer?
 
     // NX system-defined event type and media-key codes.
     private static let nxSystemDefined: CGEventType = CGEventType(rawValue: 14)!
     private static let soundUp = 0
     private static let soundDown = 1
+    private static let brightnessUp = 2
+    private static let brightnessDown = 3
     private static let mute = 7
+
+    /// Start the tap, and if it can't be created yet (permission not granted),
+    /// keep retrying so granting Accessibility while running takes effect without
+    /// a relaunch. Returns true if the tap started immediately.
+    @discardableResult
+    func startWithRetry() -> Bool {
+        if start() { return true }
+        guard retryTimer == nil else { return false }
+        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] t in
+            guard let self else { t.invalidate(); return }
+            if self.start() {
+                t.invalidate()
+                self.retryTimer = nil
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        retryTimer = timer
+        return false
+    }
 
     @discardableResult
     func start() -> Bool {
+        if tap != nil { return true }  // already running
         let mask = CGEventMask(1 << 14)  // NX_SYSDEFINED
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             let this = Unmanaged<MediaKeyTap>.fromOpaque(userInfo!).takeUnretainedValue()
@@ -68,6 +95,8 @@ final class MediaKeyTap {
         case Self.soundUp: key = .volumeUp
         case Self.soundDown: key = .volumeDown
         case Self.mute: key = .mute
+        case Self.brightnessUp where handlesBrightness: key = .brightnessUp
+        case Self.brightnessDown where handlesBrightness: key = .brightnessDown
         default: key = nil
         }
 
