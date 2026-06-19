@@ -135,6 +135,11 @@ final class NotchWindowController {
         model.showMessage(symbol: symbol, text: text)
     }
 
+    /// Mirror a macOS notification in the collapsed notch.
+    func showNotification(_ item: NotificationItem) {
+        model.showNotification(item)
+    }
+
     /// Re-reads screen metrics and repositions. Call on screen changes.
     func relayout() {
         model.metrics = .current()

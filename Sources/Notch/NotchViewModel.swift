@@ -18,6 +18,7 @@ final class NotchViewModel: ObservableObject {
         case clip(ClipItem)
         case hud(symbol: String, value: Double)  // value 0...1
         case message(symbol: String, text: String)
+        case notification(NotificationItem)
     }
     /// True while a music player is active — the idle notch shows flanking media.
     @Published var isMediaActive = false
@@ -64,6 +65,11 @@ final class NotchViewModel: ObservableObject {
         CGSize(width: max(metrics.notchSize.width + 200, 380), height: metrics.notchSize.height + 46)
     }
 
+    /// Notifications get a roomier peek for the title + body lines.
+    var notificationPeekSize: CGSize {
+        CGSize(width: max(metrics.notchSize.width + 340, 480), height: metrics.notchSize.height + 66)
+    }
+
     /// Idle media size — album art + equalizer flanking the camera, at notch height.
     var collapsedMediaSize: CGSize {
         CGSize(width: metrics.notchSize.width + 96, height: metrics.notchSize.height)
@@ -82,7 +88,10 @@ final class NotchViewModel: ObservableObject {
 
     var currentNotchSize: CGSize {
         if isExpanded { return expandedSize }
-        if isPeeking { return peekSize }
+        if isPeeking {
+            if case .notification = peekContent { return notificationPeekSize }
+            return peekSize
+        }
         if isTimerActive { return timerSize }
         if isMediaActive { return collapsedMediaSize }
         return collapsedSize
@@ -164,6 +173,12 @@ final class NotchViewModel: ObservableObject {
     func showMessage(symbol: String, text: String) {
         post(LiveActivity(content: .message(symbol: symbol, text: text),
                           duration: 2400, priority: 2, coalesceKey: "message"))
+    }
+
+    /// Mirror a macOS notification in the collapsed notch.
+    func showNotification(_ item: NotificationItem) {
+        post(LiveActivity(content: .notification(item),
+                          duration: 4200, priority: 3, coalesceKey: nil))
     }
 
     private func post(_ activity: LiveActivity) {

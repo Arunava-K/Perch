@@ -128,6 +128,8 @@ struct NotchRootView: View {
             HUDPeekView(symbol: symbol, value: value)
         case .message(let symbol, let text):
             MessagePeekView(symbol: symbol, text: text)
+        case .notification(let item):
+            NotificationPeekView(item: item)
         }
     }
 }

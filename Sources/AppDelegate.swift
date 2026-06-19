@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var musicManager: MusicManager?
     private var mediaKeyTap: MediaKeyTap?
     private var powerMonitor: PowerMonitor?
+    private var notificationMonitor: NotificationMonitor?
     private var shelfStore: ShelfStore?
     private var timerEngine: TimerEngine?
     private var moduleRegistry: ModuleRegistry?
@@ -96,6 +97,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         powerMonitor.start()
         self.powerMonitor = powerMonitor
+
+        // Mirror macOS notifications into the notch (needs Full Disk Access).
+        let notificationMonitor = NotificationMonitor()
+        notificationMonitor.onNotification = { [weak notchController] item in
+            notchController?.showNotification(item)
+        }
+        notificationMonitor.onNeedsFullDiskAccess = { [weak notchController] in
+            notchController?.showMessage(symbol: "lock.shield", text: "Grant Full Disk Access")
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        notificationMonitor.start()
+        self.notificationMonitor = notificationMonitor
 
         let libraryController = LibraryWindowController(store: clipStore)
         self.libraryController = libraryController
