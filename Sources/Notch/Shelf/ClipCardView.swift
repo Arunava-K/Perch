@@ -37,6 +37,7 @@ struct ClipCardView: View {
         .buttonStyle(PressableStyle(pressedScale: 0.96))
         .onHover { hovering = $0 }
         .onDrag { makeItemProvider() }
+        .help(tooltip)
         .contextMenu {
             Button(item.isPinned ? "Unpin" : "Pin",
                    systemImage: item.isPinned ? "pin.slash" : "pin", action: onTogglePin)
@@ -95,37 +96,32 @@ struct ClipCardView: View {
                 placeholder("photo")
             }
 
-        case .file(_, let path, let displayName):
-            ZStack(alignment: .bottom) {
-                FileThumbnail(path: path, size: CGSize(width: 80, height: 80))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Text(displayName)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        LinearGradient(colors: [.black.opacity(0), .black.opacity(0.75)],
-                                       startPoint: .top, endPoint: .bottom)
-                    )
-            }
+        case .file(_, let path, _):
+            FileThumbnail(path: path, size: CGSize(width: 80, height: 80))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
+    /// Visual clips (files & images) fill the card with a corner tag; the rest
+    /// keep their source-app footer.
     private var hasFooter: Bool {
-        if case .file = item.kind { return false }
-        return true
+        switch item.kind {
+        case .file, .image: return false
+        default: return true
+        }
     }
 
-    /// File extension shown as a corner badge (e.g. PDF, PNG).
+    /// Filename surfaced on hover (files only) since the name block is gone.
+    private var tooltip: String {
+        if case .file(_, _, let name) = item.kind { return name }
+        return ""
+    }
+
+    /// Corner badge: extension for files, pixel size for images.
     @ViewBuilder
     private var formatTag: some View {
-        if case .file(_, let path, _) = item.kind {
-            let ext = (path as NSString).pathExtension.uppercased()
-            Text(ext.isEmpty ? "FILE" : ext)
+        if let label = tagLabel {
+            Text(label)
                 .font(.system(size: 8.5, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 5)
@@ -133,6 +129,18 @@ struct ClipCardView: View {
                 .background(.black.opacity(0.5), in: Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5))
                 .padding(6)
+        }
+    }
+
+    private var tagLabel: String? {
+        switch item.kind {
+        case .file(_, let path, _):
+            let ext = (path as NSString).pathExtension.uppercased()
+            return ext.isEmpty ? "FILE" : ext
+        case .image(_, _, let width, let height):
+            return "\(width)×\(height)"
+        default:
+            return nil
         }
     }
 
