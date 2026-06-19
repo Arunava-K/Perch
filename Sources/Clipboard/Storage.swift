@@ -39,6 +39,11 @@ final class BlobStore {
     func delete(file: String) {
         try? FileManager.default.removeItem(at: url(for: file))
     }
+
+    /// All sidecar blob filenames currently on disk (used for orphan cleanup).
+    func allFiles() -> [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    }
 }
 
 /// Reads/writes the clip history as JSON, decoding item-by-item so a single

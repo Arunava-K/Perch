@@ -110,6 +110,7 @@ private struct QuickSearchRow: View {
         case .color: return "paintpalette"
         case .image: return "photo"
         case .file: return "doc"
+        case .locked: return "lock.fill"
         }
     }
 }

@@ -99,6 +99,14 @@ struct ClipCardView: View {
         case .file(_, let path, _):
             FileThumbnail(path: path, size: CGSize(width: 80, height: 80))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .locked(let type):
+            VStack(spacing: 6) {
+                Image(systemName: "lock.fill").font(.system(size: 18))
+                Text("Locked \(type)").font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(.white.opacity(0.6))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -178,6 +186,7 @@ struct ClipCardView: View {
         case .color: return "paintpalette.fill"
         case .image: return "photo"
         case .file: return "doc"
+        case .locked: return "lock.fill"
         }
     }
 
@@ -241,6 +250,9 @@ struct ClipCardView: View {
                 return NSItemProvider(contentsOf: url) ?? NSItemProvider(object: path as NSString)
             }
             return NSItemProvider(object: path as NSString)
+        case .locked:
+            // Sealed content can't leave the app without being revealed.
+            return NSItemProvider()
         }
     }
 }

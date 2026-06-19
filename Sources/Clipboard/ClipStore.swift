@@ -1,25 +1,45 @@
 import AppKit
 import Defaults
 
-/// In-memory clip history, backed by JSON persistence. Single source of truth
-/// for the UI (added in later phases).
+/// In-memory clip history, backed by the SQLite repository. Single source of
+/// truth for the UI. The published `items` array holds the active (non-trashed)
+/// history, front-first.
 @MainActor
 final class ClipStore: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
 
+    /// Soft-deleted clips, most-recently-trashed first. Recoverable until
+    /// permanently purged.
+    @Published private(set) var trashedItems: [ClipItem] = []
+
     /// Called when a clip is freshly captured (used to drive the notch peek).
     var onCapture: ((ClipItem) -> Void)?
 
-    private let persistence = ClipPersistence()
+    private let repo = ClipRepository.shared
+
+    /// Batches of ids the user deleted, newest last — drives ⌘Z undo.
+    private var undoStack: [[UUID]] = []
+    var canUndo: Bool { !undoStack.isEmpty }
+
+    /// In-memory semantic vectors keyed by clip id, for fast similarity search.
+    private var embeddingCache: [UUID: [Float]] = [:]
+
+    /// Serial queue for embedding work — NLEmbedding isn't safe to call from many
+    /// threads at once, so we compute vectors one at a time, off the main thread.
+    private let embeddingQueue = DispatchQueue(label: "com.steinerco.mybar.embedding", qos: .utility)
 
     init() {
-        items = persistence.load()
+        items = repo.load(.history)
+        trashedItems = repo.loadTrashed()
+        purgeExpiredTrash()
+        loadEmbeddings()
     }
 
     /// Insert a freshly captured clip, deduplicating by identity (a repeat copy
     /// moves the existing entry to the top and keeps its pin state).
     func add(_ item: ClipItem) {
         var list = items
+        let front: ClipItem
         if let idx = list.firstIndex(where: { $0.identityKey == item.identityKey }) {
             var existing = list.remove(at: idx)
             existing.timestamp = item.timestamp
@@ -27,12 +47,22 @@ final class ClipStore: ObservableObject {
             existing.sourceAppBundleID = item.sourceAppBundleID ?? existing.sourceAppBundleID
             existing.isSensitive = item.isSensitive
             list.insert(existing, at: 0)
+            front = existing
         } else {
             list.insert(item, at: 0)
+            front = item
         }
-        enforceLimits(&list)
+        let removed = enforceLimits(&list)
         items = list
-        persistence.save(items)
+
+        repo.upsertFront(front, container: .history)
+        for evicted in removed {
+            repo.deletePermanently(evicted.id)
+            embeddingCache[evicted.id] = nil
+            deleteBlobIfOrphaned(evicted)
+        }
+
+        triggerEmbedding(for: front.id)
         triggerOCRIfNeeded()
         if let top = items.first { onCapture?(top) }
     }
@@ -40,7 +70,9 @@ final class ClipStore: ObservableObject {
     func setOCRText(_ text: String, for id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].ocrText == nil else { return }
         items[idx].ocrText = text
-        persistence.save(items)
+        repo.setOCR(text, id: id)
+        // Re-embed now that OCR text contributes to the clip's searchable text.
+        triggerEmbedding(for: id)
     }
 
     /// Kick off OCR for the newest image clip if it hasn't been processed yet.
@@ -59,29 +91,224 @@ final class ClipStore: ObservableObject {
     func setPinned(_ pinned: Bool, for id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].isPinned = pinned
-        persistence.save(items)
+        repo.setPinned(pinned, id: id)
     }
 
+    /// Move a clip to the trash (recoverable via undo or "Put Back").
     func remove(_ id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let removed = items.remove(at: idx)
-        deleteBlobIfOrphaned(removed, in: items)
-        persistence.save(items)
+        repo.trash(id)
+        trashedItems.insert(removed, at: 0)
+        undoStack.append([id])
     }
 
+    /// Move all unpinned clips to the trash.
     func clear() {
-        let old = items
+        let removed = items.filter { !$0.isPinned }
+        guard !removed.isEmpty else { return }
         items = items.filter { $0.isPinned }
-        for item in old where !item.isPinned {
-            deleteBlobIfOrphaned(item, in: items)
+        repo.trashUnpinned(in: .history)
+        trashedItems = repo.loadTrashed()
+        undoStack.append(removed.map(\.id))
+    }
+
+    // MARK: Trash
+
+    /// Put a single trashed clip back into the active history.
+    func restore(_ id: UUID) {
+        repo.restore(id)
+        trashedItems.removeAll { $0.id == id }
+        items = repo.load(.history)
+        dropFromUndo(id)
+    }
+
+    /// Undo the most recent delete (single clip or a "clear" batch).
+    @discardableResult
+    func restoreLast() -> Bool {
+        guard let batch = undoStack.popLast() else { return false }
+        for id in batch { repo.restore(id) }
+        items = repo.load(.history)
+        trashedItems = repo.loadTrashed()
+        return true
+    }
+
+    /// Permanently delete a single trashed clip.
+    func deleteTrashedPermanently(_ id: UUID) {
+        guard let idx = trashedItems.firstIndex(where: { $0.id == id }) else { return }
+        let item = trashedItems.remove(at: idx)
+        repo.deletePermanently(id)
+        embeddingCache[id] = nil
+        dropFromUndo(id)
+        deleteBlobIfOrphaned(item)
+    }
+
+    /// Permanently delete everything in the trash.
+    func emptyTrash() {
+        let removed = trashedItems
+        trashedItems = []
+        repo.emptyTrash()
+        undoStack.removeAll()
+        for item in removed {
+            embeddingCache[item.id] = nil
+            deleteBlobIfOrphaned(item)
         }
-        persistence.save(items)
+    }
+
+    private func purgeExpiredTrash() {
+        repo.purgeTrash(olderThan: Defaults[.trashRetentionDays])
+        trashedItems = repo.loadTrashed()
+        cleanupOrphanedBlobs()
+    }
+
+    /// Drop any image blob no longer referenced by a row in any container.
+    private func cleanupOrphanedBlobs() {
+        for file in BlobStore.shared.allFiles() where !repo.isBlobReferenced(file) {
+            BlobStore.shared.delete(file: file)
+        }
+    }
+
+    private func dropFromUndo(_ id: UUID) {
+        undoStack = undoStack.compactMap { batch in
+            let remaining = batch.filter { $0 != id }
+            return remaining.isEmpty ? nil : remaining
+        }
+    }
+
+    // MARK: Semantic embeddings
+
+    /// Load persisted vectors into the cache, then backfill any active clips
+    /// that don't have one yet (e.g. captured before this feature shipped).
+    private func loadEmbeddings() {
+        for (id, vector) in repo.allEmbeddings() { embeddingCache[id] = vector }
+        let missing = items.filter { embeddingCache[$0.id] == nil && !$0.isLocked }
+        for item in missing { triggerEmbedding(for: item.id) }
+    }
+
+    /// Compute and store a clip's vector off the main thread (idempotent-ish:
+    /// recomputes if called again, e.g. after OCR adds text).
+    private func triggerEmbedding(for id: UUID) {
+        guard let item = items.first(where: { $0.id == id }), !item.isLocked else { return }
+        let text = item.searchText
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        embeddingQueue.async { [weak self] in
+            guard let vector = EmbeddingService.shared.embed(text) else { return }
+            Task { @MainActor in self?.storeEmbedding(vector, for: id) }
+        }
+    }
+
+    private func storeEmbedding(_ vector: [Float], for id: UUID) {
+        embeddingCache[id] = vector
+        repo.setEmbedding(EmbeddingService.data(from: vector), id: id)
+    }
+
+    private func dropEmbedding(for id: UUID) {
+        embeddingCache[id] = nil
+        repo.setEmbedding(nil, id: id)
+    }
+
+    func embedding(for id: UUID) -> [Float]? { embeddingCache[id] }
+
+    /// Whether on-device semantic search is usable on this machine.
+    var semanticSearchAvailable: Bool { EmbeddingService.shared.isAvailable }
+
+    /// Hybrid ranking: semantic similarity (cosine of normalized vectors) blended
+    /// with a keyword-substring boost. Empty query returns the full history.
+    /// Falls back to keyword-only when embeddings aren't available.
+    func semanticResults(for query: String) -> [ClipItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return items }
+
+        let queryVector = EmbeddingService.shared.embed(trimmed)
+        let lowerQuery = trimmed.lowercased()
+        var scored: [(item: ClipItem, score: Float)] = []
+
+        for item in items {
+            let keywordHit = item.searchText.lowercased().contains(lowerQuery)
+            var score: Float = keywordHit ? 0.6 : 0
+            if let queryVector, let vector = embeddingCache[item.id] {
+                score += max(0, EmbeddingService.similarity(queryVector, vector))
+            }
+            // Keep keyword hits and semantically close clips; drop the long tail.
+            if keywordHit || score > 0.18 {
+                scored.append((item, score))
+            }
+        }
+
+        return scored.sorted { $0.score > $1.score }.map(\.item)
+    }
+
+    // MARK: Vault
+
+    /// Ids revealed (decrypted) for the current session only.
+    private var revealedIDs: Set<UUID> = []
+
+    func isRevealed(_ id: UUID) -> Bool { revealedIDs.contains(id) }
+
+    /// Can this clip be locked? Images are excluded for now (their blob lives
+    /// unencrypted on disk); already-locked clips obviously can't re-lock.
+    func canLock(_ item: ClipItem) -> Bool {
+        if item.isLocked { return false }
+        switch item.kind {
+        case .image, .locked: return false
+        default: return true
+        }
+    }
+
+    /// Encrypt a clip at rest (prompts Touch ID to access the vault key).
+    func lock(_ id: UUID) {
+        guard let idx = items.firstIndex(where: { $0.id == id }), canLock(items[idx]) else { return }
+        let realKind = items[idx].kind
+        do {
+            let json = try JSONEncoder().encode(realKind)
+            let sealed = try ClipCrypto.seal(json, reason: "Lock this clip in Mybar")
+            let lockedKind = ClipKind.locked(type: realKind.typeName)
+            repo.applyLock(id: id, lockedKind: lockedKind, sealed: sealed)
+            items[idx].kind = lockedKind
+            items[idx].isLocked = true
+            revealedIDs.remove(id)
+            // Locked content must not be semantically searchable.
+            dropEmbedding(for: id)
+        } catch {
+            NSLog("Mybar: lock failed — \(error)")
+        }
+    }
+
+    /// Decrypt a locked clip for this session (prompts Touch ID). Persistence
+    /// stays sealed; the clip re-locks on next launch.
+    @discardableResult
+    func reveal(_ id: UUID) -> Bool {
+        guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].isLocked,
+              let sealed = repo.sealedPayload(id: id) else { return false }
+        do {
+            let data = try ClipCrypto.open(sealed, reason: "Unlock this clip")
+            items[idx].kind = try JSONDecoder().decode(ClipKind.self, from: data)
+            revealedIDs.insert(id)
+            return true
+        } catch {
+            NSLog("Mybar: reveal failed — \(error)")
+            return false
+        }
+    }
+
+    /// Permanently remove protection, decrypting first if needed.
+    func removeLock(_ id: UUID) {
+        guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].isLocked else { return }
+        if !revealedIDs.contains(id), !reveal(id) { return }
+        let realKind = items[idx].kind  // now decrypted in memory
+        let searchText = items[idx].searchText
+        repo.removeLock(id: id, kind: realKind, searchText: searchText)
+        items[idx].isLocked = false
+        revealedIDs.remove(id)
+        triggerEmbedding(for: id)
     }
 
     // MARK: Eviction
 
-    /// Enforce the configured count and age caps. Pinned items are never evicted.
-    private func enforceLimits(_ list: inout [ClipItem]) {
+    /// Enforce the configured count and age caps, returning the evicted items.
+    /// Pinned items are never evicted. Automatic eviction is permanent (only
+    /// explicit user deletes are recoverable via the trash).
+    private func enforceLimits(_ list: inout [ClipItem]) -> [ClipItem] {
         let limit = max(1, Defaults[.historyLimit])
         let maxAgeDays = Defaults[.historyMaxAgeDays]
         let cutoff = Calendar.current.date(byAdding: .day, value: -maxAgeDays, to: Date())
@@ -108,18 +335,14 @@ final class ClipStore: ObservableObject {
         }
 
         list = kept
-        for item in removed {
-            deleteBlobIfOrphaned(item, in: list)
-        }
+        return removed
     }
 
-    private func deleteBlobIfOrphaned(_ item: ClipItem, in list: [ClipItem]) {
+    /// Delete an image clip's sidecar blob if no row (any container, incl. the
+    /// trash) still references it. Call only after the row has left the DB.
+    private func deleteBlobIfOrphaned(_ item: ClipItem) {
         guard case .image(let file, _, _, _) = item.kind else { return }
-        let stillReferenced = list.contains { other in
-            if case .image(let otherFile, _, _, _) = other.kind { return otherFile == file }
-            return false
-        }
-        if !stillReferenced {
+        if !repo.isBlobReferenced(file) {
             BlobStore.shared.delete(file: file)
         }
     }

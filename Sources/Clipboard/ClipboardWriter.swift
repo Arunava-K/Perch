@@ -2,12 +2,18 @@ import AppKit
 
 /// Writes a stored clip back to the general pasteboard.
 enum ClipboardWriter {
-    static func copy(_ item: ClipItem) {
+    /// Writes a clip to the pasteboard. When `asPlainText` is false and the clip
+    /// carries RTF, both representations are written so the destination can keep
+    /// formatting; when true, only the plain string is written.
+    static func copy(_ item: ClipItem, asPlainText: Bool = false) {
         let pb = NSPasteboard.general
         pb.clearContents()
 
         switch item.kind {
         case .text(let string):
+            if !asPlainText, let rtf = item.richRTF {
+                pb.setData(rtf, forType: .rtf)
+            }
             pb.setString(string, forType: .string)
 
         case .link(let url):
@@ -35,6 +41,10 @@ enum ClipboardWriter {
             } else {
                 pb.writeObjects([NSURL(fileURLWithPath: path)])
             }
+
+        case .locked:
+            // Sealed content can't be written without first being revealed.
+            break
         }
     }
 }

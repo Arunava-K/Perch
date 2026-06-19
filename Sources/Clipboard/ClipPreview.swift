@@ -49,6 +49,16 @@ struct ClipPreview: View {
 
         case .file(_, let path, _):
             FileThumbnail(path: path, size: CGSize(width: 64, height: 64))
+
+        case .locked(let type):
+            VStack(spacing: 6) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: compact ? 16 : 22))
+                Text("Locked \(type)")
+                    .font(.system(size: compact ? 10 : 11, weight: .medium))
+            }
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

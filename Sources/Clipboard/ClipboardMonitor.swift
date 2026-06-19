@@ -45,11 +45,18 @@ final class ClipboardMonitor {
         guard let kind = classify(pb) else { return }
 
         let front = NSWorkspace.shared.frontmostApplication
+        // Keep an RTF copy of text clips so they can be pasted with formatting
+        // (and stripped on demand).
+        var richRTF: Data?
+        if case .text = kind {
+            richRTF = pb.data(forType: .rtf) ?? pb.data(forType: .rtfd)
+        }
         let item = ClipItem(
             kind: kind,
             sourceAppName: front?.localizedName,
             sourceAppBundleID: front?.bundleIdentifier,
-            isSensitive: sensitive
+            isSensitive: sensitive,
+            richRTF: richRTF
         )
         store.add(item)
     }

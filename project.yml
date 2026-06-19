@@ -15,6 +15,9 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: "2.6.0"
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "6.0.0"
 
 settings:
   base:
@@ -54,3 +57,4 @@ targets:
       - package: Defaults
       - package: KeyboardShortcuts
       - package: Sparkle
+      - package: GRDB

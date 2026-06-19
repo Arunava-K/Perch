@@ -5,11 +5,20 @@ import SwiftUI
 struct LibraryItemCell: View {
     let item: ClipItem
     let isSelected: Bool
+    var isTrashMode: Bool = false
+    var canLock: Bool = false
+    var isRevealed: Bool = false
+    var hasRichText: Bool = false
     let onSelect: () -> Void
+    /// Primary action: copy in normal mode, "Put Back" in trash mode.
     let onCopy: () -> Void
     let onTogglePin: () -> Void
     let onDelete: () -> Void
     let onQuickLook: () -> Void
+    var onLock: () -> Void = {}
+    var onReveal: () -> Void = {}
+    var onRemoveLock: () -> Void = {}
+    var onCopyPlain: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -34,15 +43,42 @@ struct LibraryItemCell: View {
                     .padding(6)
             }
         }
+        .overlay(alignment: .topLeading) {
+            if item.isLocked {
+                Image(systemName: isRevealed ? "lock.open.fill" : "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(isRevealed ? .green : .secondary)
+                    .padding(6)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onCopy)
         .onTapGesture(perform: onSelect)
         .contextMenu {
-            Button("Copy", action: onCopy)
-            Button(item.isPinned ? "Unpin" : "Pin", action: onTogglePin)
-            if canQuickLook { Button("Quick Look", action: onQuickLook) }
-            Divider()
-            Button("Delete", role: .destructive, action: onDelete)
+            if isTrashMode {
+                Button("Put Back", action: onCopy)
+                if canQuickLook { Button("Quick Look", action: onQuickLook) }
+                Divider()
+                Button("Delete Permanently", role: .destructive, action: onDelete)
+            } else if item.isLocked {
+                if isRevealed {
+                    Button("Copy", action: onCopy)
+                    if canQuickLook { Button("Quick Look", action: onQuickLook) }
+                } else {
+                    Button("Reveal…", action: onReveal)
+                }
+                Button("Remove Lock…", action: onRemoveLock)
+                Divider()
+                Button("Delete", role: .destructive, action: onDelete)
+            } else {
+                Button("Copy", action: onCopy)
+                if hasRichText { Button("Copy as Plain Text", action: onCopyPlain) }
+                Button(item.isPinned ? "Unpin" : "Pin", action: onTogglePin)
+                if canLock { Button("Lock", action: onLock) }
+                if canQuickLook { Button("Quick Look", action: onQuickLook) }
+                Divider()
+                Button("Delete", role: .destructive, action: onDelete)
+            }
         }
     }
 
@@ -77,6 +113,7 @@ struct LibraryItemCell: View {
         case .color: return "paintpalette"
         case .image: return "photo"
         case .file: return "doc"
+        case .locked: return "lock.fill"
         }
     }
 }

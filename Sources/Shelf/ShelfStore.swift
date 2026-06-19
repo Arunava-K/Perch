@@ -7,10 +7,10 @@ import AppKit
 final class ShelfStore: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
 
-    private let persistence = ClipPersistence(filename: "shelf.json")
+    private let repo = ClipRepository.shared
 
     init() {
-        items = persistence.load()
+        items = repo.load(.shelf)
     }
 
     /// Add a dropped item to the front, de-duplicating by identity.
@@ -19,32 +19,35 @@ final class ShelfStore: ObservableObject {
             // Re-drop: move it to the front instead of duplicating.
             let existing = items.remove(at: idx)
             items.insert(existing, at: 0)
+            repo.upsertFront(existing, container: .shelf)
         } else {
             items.insert(item, at: 0)
+            repo.upsertFront(item, container: .shelf)
         }
-        persistence.save(items)
     }
 
     func remove(_ id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let removed = items.remove(at: idx)
+        repo.deletePermanently(id)
         deleteBlobIfOrphaned(removed)
-        persistence.save(items)
     }
 
     func clear() {
-        let old = items
+        let removed = items
         items = []
-        old.forEach(deleteBlobIfOrphaned)
-        persistence.save(items)
+        for item in removed {
+            repo.deletePermanently(item.id)
+            deleteBlobIfOrphaned(item)
+        }
     }
 
+    /// Delete an image clip's sidecar blob if no row (any container) still
+    /// references it. Call only after the row has left the DB.
     private func deleteBlobIfOrphaned(_ item: ClipItem) {
         guard case .image(let file, _, _, _) = item.kind else { return }
-        let stillReferenced = items.contains { other in
-            if case .image(let otherFile, _, _, _) = other.kind { return otherFile == file }
-            return false
+        if !repo.isBlobReferenced(file) {
+            BlobStore.shared.delete(file: file)
         }
-        if !stillReferenced { BlobStore.shared.delete(file: file) }
     }
 }

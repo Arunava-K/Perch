@@ -8,6 +8,9 @@ enum ClipKind: Codable, Equatable {
     case color(hex: String)
     case image(blobFile: String, contentHash: String, pixelWidth: Int, pixelHeight: Int)
     case file(bookmark: Data, path: String, displayName: String)
+    /// A sealed clip whose real content is encrypted at rest. `type` preserves
+    /// the original kind name (e.g. "text") for display without revealing it.
+    case locked(type: String)
 
     /// Stable key used to deduplicate repeated copies of the same content.
     var identityKey: String {
@@ -17,6 +20,7 @@ enum ClipKind: Codable, Equatable {
         case .color(let h): return "color:\(h.lowercased())"
         case .image(_, let hash, _, _): return "image:\(hash)"
         case .file(_, let path, _): return "file:\(path)"
+        case .locked(let t): return "locked:\(t)"
         }
     }
 
@@ -28,6 +32,7 @@ enum ClipKind: Codable, Equatable {
         case .color(let h): return h
         case .image(_, _, let w, let h): return "Image \(w)×\(h)"
         case .file(_, _, let name): return name
+        case .locked: return "Locked"
         }
     }
 
@@ -38,6 +43,7 @@ enum ClipKind: Codable, Equatable {
         case .color: return "color"
         case .image: return "image"
         case .file: return "file"
+        case .locked(let t): return t
         }
     }
 }

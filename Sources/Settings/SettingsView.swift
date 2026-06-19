@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import Defaults
 import KeyboardShortcuts
 
@@ -10,6 +12,8 @@ struct SettingsView: View {
     @Default(.historyLimit) private var historyLimit
     @Default(.historyMaxAgeDays) private var historyMaxAgeDays
     @Default(.skipSensitiveContent) private var skipSensitiveContent
+    @Default(.stripFormattingByDefault) private var stripFormattingByDefault
+    @Default(.plainTextApps) private var plainTextApps
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var accessibilityGranted = AccessibilityPermission.isTrusted
@@ -60,6 +64,30 @@ struct SettingsView: View {
                 Toggle("Skip passwords & sensitive content", isOn: $skipSensitiveContent)
             }
 
+            Section {
+                Toggle("Paste without formatting by default", isOn: $stripFormattingByDefault)
+                ForEach(plainTextApps, id: \.self) { bundleID in
+                    HStack {
+                        Image(systemName: "app.dashed").foregroundStyle(.secondary)
+                        Text(Self.appName(for: bundleID))
+                        Spacer()
+                        Button {
+                            plainTextApps.removeAll { $0 == bundleID }
+                        } label: {
+                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button("Add App…", action: addPlainTextApp)
+            } header: {
+                Text("Formatting")
+            } footer: {
+                Text("Clips paste with their original formatting. Apps listed here always receive plain text.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Shortcuts") {
                 KeyboardShortcuts.Recorder("Toggle notch", name: .toggleNotch)
                 KeyboardShortcuts.Recorder("Quick search", name: .quickSearch)
@@ -107,6 +135,26 @@ struct SettingsView: View {
             launchAtLogin = LoginItem.isEnabled
             accessibilityGranted = AccessibilityPermission.isTrusted
         }
+    }
+
+    private func addPlainTextApp() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let id = Bundle(url: url)?.bundleIdentifier else { return }
+        if !plainTextApps.contains(id) { plainTextApps.append(id) }
+    }
+
+    /// Resolve a bundle ID to a display name, falling back to the ID itself.
+    static func appName(for bundleID: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            return bundleID
+        }
+        return FileManager.default.displayName(atPath: url.path)
+            .replacingOccurrences(of: ".app", with: "")
     }
 
     static var versionString: String {

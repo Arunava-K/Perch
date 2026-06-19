@@ -48,6 +48,8 @@ struct ClipPeekView: View {
             badge("doc.fill", .orange)
         case .text:
             badge("textformat", Color.white.opacity(0.15))
+        case .locked:
+            badge("lock.fill", .gray)
         }
     }
 
@@ -67,6 +69,7 @@ struct ClipPeekView: View {
         case .color(let hex): return hex.uppercased()
         case .image(_, _, let w, let h): return "Image · \(w)×\(h)"
         case .file(_, _, let name): return name
+        case .locked(let t): return "Locked \(t)"
         }
     }
 }

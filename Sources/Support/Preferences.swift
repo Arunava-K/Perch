@@ -18,8 +18,19 @@ extension Defaults.Keys {
     /// Drop unpinned clips older than this many days.
     static let historyMaxAgeDays = Key<Int>("historyMaxAgeDays", default: 30)
 
+    /// Permanently purge trashed clips after this many days.
+    static let trashRetentionDays = Key<Int>("trashRetentionDays", default: 30)
+
     /// Skip clips marked concealed/auto-generated (e.g. passwords) entirely.
     static let skipSensitiveContent = Key<Bool>("skipSensitiveContent", default: true)
+
+    // MARK: Paste formatting
+
+    /// Strip rich-text formatting on every paste (paste as plain text).
+    static let stripFormattingByDefault = Key<Bool>("stripFormattingByDefault", default: false)
+
+    /// Bundle IDs of destination apps that should always receive plain text.
+    static let plainTextApps = Key<[String]>("plainTextApps", default: [])
 
     /// Whether we've shown the Accessibility prompt at least once.
     static let didPromptAccessibility = Key<Bool>("didPromptAccessibility", default: false)
