@@ -121,35 +121,81 @@ final class NotchViewModel: ObservableObject {
         }
     }
 
-    // MARK: Sneak peek / HUD
+    // MARK: Live-activity queue (collapsed-notch peeks)
+
+    /// One thing to surface in the collapsed notch.
+    private struct LiveActivity {
+        let content: PeekContent
+        let duration: Int          // ms
+        let priority: Int          // higher preempts lower
+        let coalesceKey: String?   // same key updates in place instead of queuing
+    }
+
+    private var activityQueue: [LiveActivity] = []
+    private var currentActivity: LiveActivity?
 
     /// Briefly show a just-captured clip in the collapsed notch.
     func showClipPeek(_ item: ClipItem) {
-        presentPeek(.clip(item), duration: 1600)
+        post(LiveActivity(content: .clip(item), duration: 1600, priority: 0, coalesceKey: nil))
     }
 
-    /// Briefly show a system HUD (e.g. volume) in the collapsed notch.
+    /// Show a system HUD (volume, etc.). HUDs coalesce (rapid changes update in
+    /// place) and preempt clip peeks.
     func showHUD(symbol: String, value: Double) {
-        presentPeek(.hud(symbol: symbol, value: value), duration: 1200)
+        post(LiveActivity(content: .hud(symbol: symbol, value: value),
+                          duration: 1200, priority: 1, coalesceKey: "hud"))
     }
 
-    private func presentPeek(_ content: PeekContent, duration: Int) {
-        // A fully open notch doesn't need a peek.
+    private func post(_ activity: LiveActivity) {
+        // A fully open notch doesn't peek.
         guard !isExpanded else { return }
-        peekTask?.cancel()
-        peekContent = content
+
+        // Coalesce: a same-key activity replaces the current/pending one.
+        if let key = activity.coalesceKey {
+            if currentActivity?.coalesceKey == key {
+                present(activity)
+                return
+            }
+            activityQueue.removeAll { $0.coalesceKey == key }
+        }
+
+        if currentActivity == nil {
+            present(activity)
+        } else if activity.priority > (currentActivity?.priority ?? 0) {
+            activityQueue.insert(currentActivity!, at: 0)  // requeue the preempted one
+            present(activity)
+        } else {
+            activityQueue.append(activity)
+        }
+    }
+
+    private func present(_ activity: LiveActivity) {
+        currentActivity = activity
+        peekContent = activity.content
         withAnimation(openAnimation) { isPeeking = true }
+        peekTask?.cancel()
         peekTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(duration))
+            try? await Task.sleep(for: .milliseconds(activity.duration))
             guard let self, !Task.isCancelled, !self.isExpanded else { return }
-            withAnimation(self.closeAnimation) { self.isPeeking = false }
-            self.peekContent = nil
+            self.advanceQueue()
+        }
+    }
+
+    private func advanceQueue() {
+        if activityQueue.isEmpty {
+            currentActivity = nil
+            withAnimation(closeAnimation) { isPeeking = false }
+            peekContent = nil
+        } else {
+            present(activityQueue.removeFirst())
         }
     }
 
     private func endPeek() {
         peekTask?.cancel()
         peekTask = nil
+        activityQueue.removeAll()
+        currentActivity = nil
         if isPeeking { isPeeking = false }
         peekContent = nil
     }
