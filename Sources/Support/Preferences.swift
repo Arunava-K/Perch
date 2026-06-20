@@ -23,6 +23,9 @@ extension Defaults.Keys {
     /// default — it needs Full Disk Access and reads the Notification Center DB.
     static let notificationMirroringEnabled = Key<Bool>("notificationMirroringEnabled", default: false)
 
+    /// Bundle IDs whose notifications are never mirrored into the notch.
+    static let mutedNotificationApps = Key<[String]>("mutedNotificationApps", default: [])
+
     // MARK: Clipboard history
 
     /// Max number of unpinned clips to keep.

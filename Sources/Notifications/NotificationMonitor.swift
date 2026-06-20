@@ -134,11 +134,16 @@ final class NotificationMonitor {
                 """, arguments: [lastRecID])
         }) ?? []
 
+        // Read the mute list once per poll; resolved at delivery time so edits
+        // in Settings take effect on the next notification.
+        let muted = Set(Defaults[.mutedNotificationApps])
+
         for row in rows {
             let recID: Int64 = row["rec_id"] ?? 0
             lastRecID = max(lastRecID, recID)
             let bundleID: String? = row["identifier"]
             if let bundleID, bundleID == ownBundleID { continue }
+            if let bundleID, muted.contains(bundleID) { continue }
             guard let data: Data = row["data"] else { continue }
             if let item = Self.parse(data: data, bundleID: bundleID) {
                 onNotification?(item)

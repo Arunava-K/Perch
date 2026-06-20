@@ -167,6 +167,7 @@ private struct ClipboardPane: View {
 
 private struct NotificationsPane: View {
     @Default(.notificationMirroringEnabled) private var notificationMirroringEnabled
+    @Default(.mutedNotificationApps) private var mutedNotificationApps
 
     var body: some View {
         Form {
@@ -177,7 +178,47 @@ private struct NotificationsPane: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            if notificationMirroringEnabled {
+                Section {
+                    if mutedNotificationApps.isEmpty {
+                        Text("No muted apps")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(mutedNotificationApps, id: \.self) { bundleID in
+                        HStack {
+                            Image(systemName: "bell.slash").foregroundStyle(.secondary)
+                            Text(SettingsFormatHelpers.appName(for: bundleID))
+                            Spacer()
+                            Button {
+                                mutedNotificationApps.removeAll { $0 == bundleID }
+                            } label: {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Button("Mute App…", action: muteApp)
+                } header: {
+                    Text("Muted Apps")
+                } footer: {
+                    Text("Notifications from these apps are never mirrored into the notch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
+    }
+
+    private func muteApp() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let id = Bundle(url: url)?.bundleIdentifier else { return }
+        if !mutedNotificationApps.contains(id) { mutedNotificationApps.append(id) }
     }
 }
 
