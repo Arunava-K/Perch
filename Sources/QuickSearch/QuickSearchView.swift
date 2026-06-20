@@ -121,6 +121,33 @@ struct QuickSearchView: View {
         flatEntries.indices.contains(selection) ? flatEntries[selection] : nil
     }
 
+    /// A header or an entry, numbered with its flat index in one pass so the
+    /// rendered rows and keyboard selection always share the same numbering.
+    private enum DisplayRow: Identifiable {
+        case header(String)
+        case entry(Int, Entry)
+
+        var id: String {
+            switch self {
+            case .header(let title): return "h-\(title)"
+            case .entry(_, let entry): return entry.id
+            }
+        }
+    }
+
+    private var displayRows: [DisplayRow] {
+        var rows: [DisplayRow] = []
+        var i = 0
+        for group in groups {
+            rows.append(.header(group.title))
+            for entry in group.entries {
+                rows.append(.entry(i, entry))
+                i += 1
+            }
+        }
+        return rows
+    }
+
     // MARK: Search field
 
     private var searchField: some View {
@@ -157,15 +184,17 @@ struct QuickSearchView: View {
                         .padding(.top, 40)
                 } else {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(groups, id: \.title) { group in
-                            Text(group.title.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 14)
-                                .padding(.top, 10)
-                                .padding(.bottom, 2)
-                            ForEach(group.entries) { entry in
-                                let index = flatEntries.firstIndex { $0.id == entry.id } ?? 0
+                        ForEach(displayRows) { row in
+                            switch row {
+                            case .header(let title):
+                                Text(title.uppercased())
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 14)
+                                    .padding(.top, 10)
+                                    .padding(.bottom, 2)
+                            case .entry(let index, let entry):
                                 PaletteRow(entry: entry, selected: index == selection)
                                     .id(index)
                                     .contentShape(Rectangle())
