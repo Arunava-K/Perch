@@ -1,10 +1,14 @@
 import AppKit
+import Defaults
 
 /// Adds a menu-bar status item so the accessory app is discoverable and
-/// quittable, and exposes Settings.
+/// quittable, and exposes Settings. The item can be hidden via Settings; the
+/// notch's gear button keeps Settings reachable when it is.
 @MainActor
 final class StatusBarController {
     private var statusItem: NSStatusItem?
+    private let menu: NSMenu
+    private var observation: Defaults.Observation?
     private let onToggleNotch: () -> Void
     private let onOpenLibrary: () -> Void
     private let onOpenSettings: () -> Void
@@ -20,17 +24,33 @@ final class StatusBarController {
         self.onOpenLibrary = onOpenLibrary
         self.onOpenSettings = onOpenSettings
         self.onClearHistory = onClearHistory
-        setup()
+        self.menu = NSMenu()
+        buildMenu()
+        // Reflect the pref now and whenever it changes (live toggle from Settings).
+        observation = Defaults.observe(.hideMenuBarIcon) { [weak self] change in
+            self?.applyVisibility(hidden: change.newValue)
+        }
     }
 
-    private func setup() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(
-            systemSymbolName: "rectangle.topthird.inset.filled",
-            accessibilityDescription: "Mybar"
-        )
+    /// Create or tear down the status item to match the preference.
+    private func applyVisibility(hidden: Bool) {
+        if hidden {
+            if let statusItem {
+                NSStatusBar.system.removeStatusItem(statusItem)
+                self.statusItem = nil
+            }
+        } else if statusItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            item.button?.image = NSImage(
+                systemSymbolName: "rectangle.topthird.inset.filled",
+                accessibilityDescription: "Mybar"
+            )
+            item.menu = menu
+            statusItem = item
+        }
+    }
 
-        let menu = NSMenu()
+    private func buildMenu() {
         menu.addItem(
             withTitle: "Toggle Notch",
             action: #selector(toggleNotch),
@@ -69,9 +89,6 @@ final class StatusBarController {
             action: #selector(quit),
             keyEquivalent: "q"
         ).target = self
-
-        item.menu = menu
-        statusItem = item
     }
 
     @objc private func toggleNotch() {

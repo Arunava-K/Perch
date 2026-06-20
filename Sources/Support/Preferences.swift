@@ -13,6 +13,16 @@ extension Defaults.Keys {
     /// Subtle haptic feedback on notch expand and paste.
     static let hapticFeedback = Key<Bool>("hapticFeedback", default: true)
 
+    /// Hide the menu-bar status item. Settings stay reachable from the notch's
+    /// gear button and the Toggle/Quick-Search hotkeys.
+    static let hideMenuBarIcon = Key<Bool>("hideMenuBarIcon", default: false)
+
+    // MARK: Notifications
+
+    /// Opt-in: mirror delivered macOS notifications into the notch. Off by
+    /// default — it needs Full Disk Access and reads the Notification Center DB.
+    static let notificationMirroringEnabled = Key<Bool>("notificationMirroringEnabled", default: false)
+
     // MARK: Clipboard history
 
     /// Max number of unpinned clips to keep.

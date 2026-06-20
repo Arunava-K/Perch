@@ -15,6 +15,8 @@ struct NotchRootView: View {
     @ObservedObject var calendar: CalendarManager
     /// Webcam mirror, toggled from the top-right corner button.
     @ObservedObject var camera: CameraManager
+    /// Opens the Settings window (gear button in the top-right ear).
+    let onOpenSettings: () -> Void
 
     @State private var dropTargeted = false
 
@@ -80,6 +82,19 @@ struct NotchRootView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(PressableStyle(pressedScale: 0.94))
+    }
+
+    /// Settings gear in the top-right "ear", sitting beside the webcam toggle.
+    private var settingsButton: some View {
+        Button(action: onOpenSettings) {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.42))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle(pressedScale: 0.94))
         .padding(.trailing, 16)
     }
 
@@ -110,6 +125,7 @@ struct NotchRootView: View {
                 HStack(alignment: .center, spacing: 0) {
                     NotchTabBar(modules: registry.modules, selectedID: $registry.selectedID)
                     webcamButton
+                    settingsButton
                 }
                 .frame(height: 26)
                 .padding(.top, 7)

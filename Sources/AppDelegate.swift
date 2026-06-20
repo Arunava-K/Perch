@@ -110,7 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         powerMonitor.start()
         self.powerMonitor = powerMonitor
 
-        // Mirror macOS notifications into the notch (needs Full Disk Access).
+        // Mirror macOS notifications into the notch (opt-in; needs Full Disk
+        // Access). activate() runs the mirror only while the pref is enabled and
+        // reacts to live toggles from Settings.
         let notificationMonitor = NotificationMonitor()
         notificationMonitor.onNotification = { [weak notchController] item in
             notchController?.showNotification(item)
@@ -121,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSWorkspace.shared.open(url)
             }
         }
-        notificationMonitor.start()
+        notificationMonitor.activate()
         self.notificationMonitor = notificationMonitor
 
         let libraryController = LibraryWindowController(store: clipStore)
@@ -132,6 +134,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager)
         self.settingsController = settingsController
+
+        // The notch's gear button opens Settings (also reachable when the menu
+        // bar icon is hidden).
+        notchController.onOpenSettings = { [weak settingsController] in
+            settingsController?.show()
+        }
 
         statusBarController = StatusBarController(
             onToggleNotch: { [weak notchController] in

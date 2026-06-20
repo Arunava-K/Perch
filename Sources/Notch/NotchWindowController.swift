@@ -17,6 +17,10 @@ final class NotchWindowController {
     private var hoverTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
+    /// Invoked by the notch's gear button. Set after construction (the Settings
+    /// controller is created later in app startup).
+    var onOpenSettings: (() -> Void)?
+
     init(registry: ModuleRegistry, music: MusicManager, timer: TimerEngine, calendar: CalendarManager, camera: CameraManager) {
         // The window is fixed to the tallest of any tab or the webcam mirror.
         let tallest = max(NotchViewModel.webcamMaxHeight, registry.allModules.map(\.preferredExpandedHeight).max() ?? 180)
@@ -37,7 +41,7 @@ final class NotchWindowController {
             model?.interactiveRect ?? .zero
         }
 
-        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer, calendar: calendar, camera: camera))
+        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer, calendar: calendar, camera: camera, onOpenSettings: { [weak self] in self?.onOpenSettings?() }))
         hosting.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosting)
         panel.contentView = container

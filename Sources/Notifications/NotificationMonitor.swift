@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import AppKit
+import Defaults
 
 /// Mirrors macOS notifications into the notch by polling the Notification Center
 /// database (group.com.apple.usernoted). Requires Full Disk Access. The DB schema
@@ -17,9 +18,27 @@ final class NotificationMonitor {
     private var pollTimer: Timer?
     private var retryTimer: Timer?
     private var askedForAccess = false
+    private var observation: Defaults.Observation?
     private let ownBundleID = Bundle.main.bundleIdentifier
 
     var isConnected: Bool { connected }
+
+    /// Observe the opt-in pref and run the mirror only while it's enabled.
+    /// Fires immediately with the current value, so this both reflects the
+    /// saved choice at launch and reacts to live toggles from Settings.
+    func activate() {
+        observation = Defaults.observe(.notificationMirroringEnabled) { [weak self] change in
+            if change.newValue { self?.start() } else { self?.stop() }
+        }
+    }
+
+    /// Tear down polling/retry. Safe to call when not running.
+    func stop() {
+        pollTimer?.invalidate(); pollTimer = nil
+        retryTimer?.invalidate(); retryTimer = nil
+        connected = false
+        askedForAccess = false
+    }
 
     /// A fresh read-only connection. We deliberately open one per read: a single
     /// long-lived read-only connection to the system's live WAL database gets
@@ -42,6 +61,7 @@ final class NotificationMonitor {
     }
 
     func start() {
+        guard pollTimer == nil, retryTimer == nil else { return }  // already running
         if openDatabase() {
             beginPolling()
         } else {

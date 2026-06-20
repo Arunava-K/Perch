@@ -11,9 +11,11 @@ struct SettingsView: View {
 
     @Default(.openNotchOnHover) private var openNotchOnHover
     @Default(.hapticFeedback) private var hapticFeedback
+    @Default(.hideMenuBarIcon) private var hideMenuBarIcon
     @Default(.historyLimit) private var historyLimit
     @Default(.historyMaxAgeDays) private var historyMaxAgeDays
     @Default(.skipSensitiveContent) private var skipSensitiveContent
+    @Default(.notificationMirroringEnabled) private var notificationMirroringEnabled
     @Default(.stripFormattingByDefault) private var stripFormattingByDefault
     @Default(.plainTextApps) private var plainTextApps
     @Default(.calendarEnabled) private var calendarEnabled
@@ -24,13 +26,22 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("General") {
+            Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         LoginItem.setEnabled(newValue)
                     }
                 Toggle("Open notch on hover", isOn: $openNotchOnHover)
                 Toggle("Haptic feedback", isOn: $hapticFeedback)
+                Toggle("Hide menu bar icon", isOn: $hideMenuBarIcon)
+            } header: {
+                Text("General")
+            } footer: {
+                if hideMenuBarIcon {
+                    Text("Open Settings from the gear button in the notch, or reach the menu with the Toggle Notch shortcut.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -67,6 +78,16 @@ struct SettingsView: View {
                     LabeledContent("Discard after", value: "\(historyMaxAgeDays) days")
                 }
                 Toggle("Skip passwords & sensitive content", isOn: $skipSensitiveContent)
+            }
+
+            Section {
+                Toggle("Mirror notifications in the notch", isOn: $notificationMirroringEnabled)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Shows delivered macOS notifications in the collapsed notch. Requires Full Disk Access — you'll be prompted to grant it when first enabled.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
