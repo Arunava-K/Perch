@@ -13,6 +13,8 @@ struct LibraryView: View {
     @State private var appFilter: String = LibraryView.allApps
     @State private var selection: Set<UUID> = []
     @State private var sidebarSelection: SidebarItem? = .all
+    @State private var keywordResults: [ClipItem] = []
+    @State private var searchTask: Task<Void, Never>?
 
     static let allApps = "All Apps"
 
@@ -32,6 +34,23 @@ struct LibraryView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 460)
+        .onChange(of: search) { _, _ in refreshKeyword() }
+        .onChange(of: searchMode) { _, _ in refreshKeyword() }
+    }
+
+    /// Run keyword search through the shared FTS engine, off-main and debounced.
+    /// (Trash and Semantic modes filter in memory instead.)
+    private func refreshKeyword() {
+        guard searchMode == .keyword, !isTrashMode, !search.isEmpty else { return }
+        searchTask?.cancel()
+        let query = search
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(60))
+            if Task.isCancelled { return }
+            let found = await store.search(query, limit: 500)
+            if Task.isCancelled { return }
+            keywordResults = found
+        }
     }
 
     // MARK: Sidebar
@@ -199,25 +218,33 @@ struct LibraryView: View {
         Array(Set(scopedItems.compactMap { $0.sourceAppName })).sorted()
     }
 
-    private var filtered: [ClipItem] {
-        // Semantic ranking applies only to active scopes with a query.
-        let useSemantic = searchMode == .semantic && !isTrashMode && !search.isEmpty
-        let base: [ClipItem]
-        if useSemantic {
-            let scopeIDs = Set(scopedItems.map(\.id))
-            base = store.semanticResults(for: search).filter { scopeIDs.contains($0.id) }
-        } else {
-            base = scopedItems
+    /// The scoped result set before type/app filters: no-query scopes return all
+    /// scoped items; keyword uses the shared FTS engine; semantic ranks in memory;
+    /// trash filters its (small) set in memory.
+    private var base: [ClipItem] {
+        if isTrashMode {
+            guard !search.isEmpty else { return store.trashedItems }
+            let needle = search.lowercased()
+            return store.trashedItems.filter { $0.searchText.lowercased().contains(needle) }
         }
-        return base.filter { item in
-            typeFilter.matches(item) &&
-            (appFilter == Self.allApps || item.sourceAppName == appFilter) &&
-            (useSemantic || search.isEmpty || matchesSearch(item))
+        guard !search.isEmpty else { return scopedItems }
+        if searchMode == .semantic {
+            let scopeIDs = Set(scopedItems.map(\.id))
+            return store.semanticResults(for: search).filter { scopeIDs.contains($0.id) }
+        }
+        // Keyword: FTS results (active history) constrained to the current scope.
+        switch scope {
+        case .pinned: return keywordResults.filter(\.isPinned)
+        case .locked: return keywordResults.filter(\.isLocked)
+        default: return keywordResults
         }
     }
 
-    private func matchesSearch(_ item: ClipItem) -> Bool {
-        item.searchText.lowercased().contains(search.lowercased())
+    private var filtered: [ClipItem] {
+        base.filter { item in
+            typeFilter.matches(item) &&
+            (appFilter == Self.allApps || item.sourceAppName == appFilter)
+        }
     }
 
     private func quickLookSelection() {
