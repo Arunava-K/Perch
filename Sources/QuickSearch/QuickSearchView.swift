@@ -130,7 +130,12 @@ struct QuickSearchView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .focused($focused)
-                .onKeyPress(phases: .down) { handleKey($0) }
+                // Targeted nav keys intercept reliably over the focused field;
+                // the general handler covers ⌘-combos only (so typing still works).
+                .onKeyPress(keys: [.upArrow, .downArrow, .return, .escape], phases: .down) { handleKey($0) }
+                .onKeyPress(phases: .down) { press in
+                    press.modifiers.contains(.command) ? handleKey(press) : .ignored
+                }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -164,6 +169,7 @@ struct QuickSearchView: View {
                                 PaletteRow(entry: entry, selected: index == selection)
                                     .id(index)
                                     .contentShape(Rectangle())
+                                    .onHover { if $0 { selection = index } }
                                     .onTapGesture { selection = index; activatePrimary() }
                             }
                         }
