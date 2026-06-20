@@ -13,6 +13,8 @@ struct NotchRootView: View {
     @ObservedObject var timer: TimerEngine
     /// Drives the *collapsed* meeting countdown flank.
     @ObservedObject var calendar: CalendarManager
+    /// Webcam mirror, toggled from the top-right corner button.
+    @ObservedObject var camera: CameraManager
 
     @State private var dropTargeted = false
 
@@ -40,8 +42,45 @@ struct NotchRootView: View {
         )
         .ignoresSafeArea()
         .onChange(of: registry.selectedID) { _, _ in
-            model.setExpandedHeight(registry.selected?.preferredExpandedHeight ?? 180)
+            model.showWebcam = false      // picking a tab leaves the mirror
+            model.setExpandedHeight(targetHeight)
         }
+        .onChange(of: model.showWebcam) { _, _ in
+            model.setExpandedHeight(targetHeight)
+        }
+    }
+
+    /// Webcam height from the 16:9 display aspect: the preview fills the width
+    /// (minus side insets) and the panel height follows. Otherwise the selected
+    /// tab's preferred height.
+    private var targetHeight: CGFloat {
+        guard model.showWebcam else { return registry.selected?.preferredExpandedHeight ?? 180 }
+        let availableWidth = model.expandedWidth - 2 * NotchViewModel.webcamSideInset
+        let previewHeight = availableWidth / NotchViewModel.webcamDisplayAspect
+        return min(NotchViewModel.webcamMaxHeight, previewHeight + NotchViewModel.webcamChrome)
+    }
+
+    /// Camera toggle in the top-right "ear", mirroring the tab bar on the left.
+    private var webcamButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                model.showWebcam.toggle()
+            }
+        } label: {
+            Image(systemName: "web.camera.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(model.showWebcam ? .white : .white.opacity(0.42))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background {
+                    if model.showWebcam {
+                        Capsule(style: .continuous).fill(.white.opacity(0.13))
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle(pressedScale: 0.94))
+        .padding(.trailing, 16)
     }
 
     private var notchShape: NotchShape {
@@ -67,15 +106,24 @@ struct NotchRootView: View {
     private var expandedContent: some View {
         if model.isExpanded {
             VStack(alignment: .leading, spacing: 0) {
-                // Tabs sit in the top-left "ear", beside the camera.
-                NotchTabBar(modules: registry.modules, selectedID: $registry.selectedID)
-                    .frame(height: 26)
-                    .padding(.top, 7)
+                // Tabs in the top-left "ear", webcam toggle in the top-right ear.
+                HStack(alignment: .center, spacing: 0) {
+                    NotchTabBar(modules: registry.modules, selectedID: $registry.selectedID)
+                    webcamButton
+                }
+                .frame(height: 26)
+                .padding(.top, 7)
                 // Full-width content must clear the camera notch, then fill the
                 // rest of the height (top-aligned).
-                tabContent
-                    .padding(.top, max(10, model.metrics.notchSize.height - 29))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                Group {
+                    if model.showWebcam {
+                        WebcamView(camera: camera)
+                    } else {
+                        tabContent
+                    }
+                }
+                .padding(.top, max(10, model.metrics.notchSize.height - 29))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.bottom, 12)

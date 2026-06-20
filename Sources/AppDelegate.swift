@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shelfStore: ShelfStore?
     private var timerEngine: TimerEngine?
     private var calendarManager: CalendarManager?
+    private var cameraManager: CameraManager?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
 
@@ -49,6 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let calendarManager = CalendarManager()
         self.calendarManager = calendarManager
 
+        // Webcam mirror (top-right corner of the notch). Camera runs only while
+        // the mirror is visible.
+        let cameraManager = CameraManager()
+        self.cameraManager = cameraManager
+
         // Register the notch modules (tab order = registration order).
         let registry = ModuleRegistry(modules: [
             ClipboardModule(store: clipStore),
@@ -59,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
         self.moduleRegistry = registry
 
-        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager)
+        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, camera: cameraManager)
         notchController.show()
         self.notchController = notchController
 

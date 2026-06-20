@@ -29,6 +29,23 @@ final class NotchViewModel: ObservableObject {
     @Published var metrics: NotchMetrics
     /// Expanded height of the currently-selected tab (modules can differ).
     @Published var expandedHeight: CGFloat = 180
+    /// The webcam mirror is showing (toggled from the top-right corner button).
+    @Published var showWebcam = false
+
+    /// Window-size ceiling for the webcam mirror. The *actual* notch height is
+    /// computed from the camera's aspect ratio so the feed fills the width and
+    /// the height follows.
+    static let webcamMaxHeight: CGFloat = 600
+    /// Notch chrome above + below the webcam preview (tab row, camera clearance,
+    /// bottom inset) added to the computed preview height.
+    static let webcamChrome: CGFloat = 70
+    /// Left/right inset for the webcam preview (kept in sync between the height
+    /// calc and the view so the side gap matches the bottom gap).
+    static let webcamSideInset: CGFloat = 26
+    /// Display aspect for the mirror. The sensor is captured at full 4:3 (full
+    /// field of view); we present it 16:9 so the panel stays short while keeping
+    /// the full horizontal view (only a little is trimmed top/bottom).
+    static let webcamDisplayAspect: CGFloat = 1.9
 
     /// Delay before collapsing after the cursor leaves, to avoid flicker when
     /// the pointer briefly crosses the rounded corners.
@@ -66,7 +83,7 @@ final class NotchViewModel: ObservableObject {
 
     /// Slightly wider than before so the tab bar fits in the left "ear" beside
     /// the camera, letting the tabs pin to the very top.
-    private var expandedWidth: CGFloat { max(metrics.notchSize.width + 520, 740) }
+    var expandedWidth: CGFloat { max(metrics.notchSize.width + 520, 740) }
 
     /// Size of the notch shape when expanded — height varies per selected tab.
     var expandedSize: CGSize {

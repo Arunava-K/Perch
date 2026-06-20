@@ -56,6 +56,8 @@ targets:
         # Required to show today's events and the next-meeting countdown (opt-in).
         NSCalendarsUsageDescription: "Mybar shows your upcoming events and counts down to your next meeting in the notch."
         NSCalendarsFullAccessUsageDescription: "Mybar shows your upcoming events and counts down to your next meeting in the notch."
+        # Required for the webcam mirror (camera preview in the notch).
+        NSCameraUsageDescription: "Mybar shows a live mirror from your camera in the notch so you can check yourself before a call."
         # Sparkle auto-update. Fill in before shipping (see RELEASING.md):
         #   SUFeedURL: your published appcast.xml URL
         #   SUPublicEDKey: the EdDSA public key from Sparkle's generate_keys
