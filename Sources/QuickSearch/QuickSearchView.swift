@@ -169,7 +169,6 @@ struct QuickSearchView: View {
                                 PaletteRow(entry: entry, selected: index == selection)
                                     .id(index)
                                     .contentShape(Rectangle())
-                                    .onHover { if $0 { selection = index } }
                                     .onTapGesture { selection = index; activatePrimary() }
                             }
                         }
