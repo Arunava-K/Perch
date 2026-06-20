@@ -20,7 +20,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar))
             let window = NSWindow(contentViewController: hosting)
             window.title = "Mybar Settings"
-            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.setContentSize(NSSize(width: 720, height: 540))
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.center()
