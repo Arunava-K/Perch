@@ -161,9 +161,9 @@ struct QuickSearchView: View {
     private var detailPane: some View {
         if let item = selectedItem {
             VStack(alignment: .leading, spacing: 14) {
-                ClipPreview(item: item, compact: false)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(maxHeight: 230)
+                ClipPreview(item: item, compact: false, imageContentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 230)
+                    .clipped()
                 Divider()
                 VStack(spacing: 8) {
                     ForEach(metadata(for: item), id: \.0) { row in

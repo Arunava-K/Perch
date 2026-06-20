@@ -5,6 +5,9 @@ import SwiftUI
 struct ClipPreview: View {
     let item: ClipItem
     var compact: Bool = true
+    /// How images fill their frame. Cards/thumbnails want `.fill`; a detail
+    /// preview wants `.fit` so the whole image stays visible within a max width.
+    var imageContentMode: ContentMode = .fill
 
     var body: some View {
         switch item.kind {
@@ -39,7 +42,7 @@ struct ClipPreview: View {
             }
 
         case .image(let blobFile, _, _, _):
-            ImageThumbnail(blobFile: blobFile, maxPixel: compact ? 320 : 600)
+            ImageThumbnail(blobFile: blobFile, maxPixel: compact ? 320 : 600, contentMode: imageContentMode)
 
         case .file(_, let path, _):
             FileThumbnail(path: path, size: CGSize(width: 64, height: 64))
@@ -70,6 +73,7 @@ struct ClipPreview: View {
 struct ImageThumbnail: View {
     let blobFile: String
     var maxPixel: CGFloat = 320
+    var contentMode: ContentMode = .fill
 
     @State private var image: NSImage?
 
@@ -78,7 +82,7 @@ struct ImageThumbnail: View {
             if let image {
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: contentMode)
             } else {
                 Color.white.opacity(0.04)
             }
