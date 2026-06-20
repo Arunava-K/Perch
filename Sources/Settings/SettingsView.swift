@@ -17,6 +17,7 @@ struct SettingsView: View {
     @Default(.stripFormattingByDefault) private var stripFormattingByDefault
     @Default(.plainTextApps) private var plainTextApps
     @Default(.calendarEnabled) private var calendarEnabled
+    @Default(.calendarShowCountdown) private var calendarShowCountdown
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var accessibilityGranted = AccessibilityPermission.isTrusted
@@ -73,6 +74,10 @@ struct SettingsView: View {
                     .onChange(of: calendarEnabled) { _, on in
                         calendar.setEnabled(on)
                     }
+                if calendarEnabled {
+                    Toggle("Show next-meeting countdown in notch", isOn: $calendarShowCountdown)
+                        .onChange(of: calendarShowCountdown) { _, _ in calendar.reevaluate() }
+                }
                 if calendarEnabled, calendar.access == .denied {
                     HStack {
                         Label("Calendar access denied", systemImage: "exclamationmark.triangle.fill")

@@ -46,6 +46,10 @@ extension Defaults.Keys {
     /// Event-calendar ids the user has hidden from the notch (empty = show all).
     static let hiddenCalendarIDs = Key<[String]>("hiddenCalendarIDs", default: [])
 
+    /// Show a persistent countdown to the next meeting in the collapsed notch.
+    /// Off by default — a one-time reminder peek fires regardless.
+    static let calendarShowCountdown = Key<Bool>("calendarShowCountdown", default: false)
+
     // MARK: Modules / tabs
 
     /// Module ids in display order (empty = registration order).

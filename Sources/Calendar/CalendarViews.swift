@@ -87,6 +87,7 @@ struct CalendarTab: View {
                 .tracking(0.5)
                 .textCase(.uppercase)
                 .foregroundStyle(.white.opacity(0.4))
+                .padding(.leading, 8)
 
             if calendar.dayEvents.isEmpty {
                 EmptyEventsView(selectedDate: selectedDate)
@@ -111,6 +112,7 @@ struct CalendarTab: View {
     }
 
     private func agendaRow(_ e: CalendarEvent) -> some View {
+        let isLive = e.isInProgress(at: now)
         let isPast = e.end < now && Calendar.current.isDateInToday(e.start)
         return HStack(alignment: .top, spacing: 8) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
@@ -122,9 +124,9 @@ struct CalendarTab: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 5) {
-                    Text(e.isAllDay ? "All-day" : shortTime(e.start))
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                    Text(isLive ? "Now" : (e.isAllDay ? "All-day" : shortTime(e.start)))
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(isLive ? e.calendarColor : .white.opacity(0.55))
                     if e.videoURL != nil {
                         Image(systemName: "video.fill")
                             .font(.system(size: 8))
@@ -134,6 +136,12 @@ struct CalendarTab: View {
             }
             Spacer(minLength: 0)
         }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isLive ? e.calendarColor.opacity(0.18) : .clear)
+        )
         .contentShape(Rectangle())
         .opacity(isPast ? 0.5 : 1)
     }

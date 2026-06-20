@@ -212,12 +212,15 @@ final class CalendarManager: ObservableObject {
             .filter { $0.end > now }
 
         events = mapped
-        nextEvent = mapped.first { !$0.isAllDay }
+        // "Up next" = the soonest event that hasn't started yet, so the flank
+        // counts down and never gets stuck at "Now" during an in-progress event.
+        nextEvent = mapped.first { !$0.isAllDay && $0.start > now }
 
         if let next = nextEvent {
-            let lead = next.start.timeIntervalSince(now)
-            isImminent = lead <= Self.imminentWindow  // negative = in progress
-            if lead > 0, lead <= Self.reminderLeadTime, !remindedEventIDs.contains(next.id) {
+            let lead = next.start.timeIntervalSince(now)  // always > 0
+            // Persistent countdown flank is opt-in; the one-time peek always fires.
+            isImminent = Defaults[.calendarShowCountdown] && lead <= Self.imminentWindow
+            if lead <= Self.reminderLeadTime, !remindedEventIDs.contains(next.id) {
                 remindedEventIDs.insert(next.id)
                 onReminder?(next)
             }
@@ -228,6 +231,9 @@ final class CalendarManager: ObservableObject {
         refreshDayEvents()
         refreshMonthMarks()
     }
+
+    /// Re-run live-activity evaluation immediately (e.g. after a settings change).
+    func reevaluate() { refresh() }
 
     private var visibleCalendarIDs: Set<String> {
         Set(calendars.map(\.id)).subtracting(Defaults[.hiddenCalendarIDs])
