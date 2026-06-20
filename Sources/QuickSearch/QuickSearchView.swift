@@ -8,14 +8,10 @@ struct QuickSearchView: View {
     var onClose: () -> Void
 
     @State private var query = ""
+    @State private var results: [ClipItem] = []
     @State private var selection = 0
+    @State private var searchTask: Task<Void, Never>?
     @FocusState private var focused: Bool
-
-    private var results: [ClipItem] {
-        guard !query.isEmpty else { return Array(store.items.prefix(50)) }
-        let needle = query.lowercased()
-        return store.items.filter { $0.searchText.lowercased().contains(needle) }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +26,24 @@ struct QuickSearchView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
+        .onAppear {
+            focused = true
+            runSearch(query, debounce: false)
+        }
+    }
+
+    /// Debounced, off-main FTS search via the shared engine.
+    private func runSearch(_ text: String, debounce: Bool) {
+        searchTask?.cancel()
+        searchTask = Task {
+            if debounce {
+                try? await Task.sleep(for: .milliseconds(60))
+                if Task.isCancelled { return }
+            }
+            let found = await store.search(text)
+            if Task.isCancelled { return }
+            results = found
+        }
     }
 
     private var searchField: some View {
@@ -46,8 +60,10 @@ struct QuickSearchView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .onChange(of: query) { _, _ in selection = 0 }
-        .onAppear { focused = true }
+        .onChange(of: query) { _, newValue in
+            selection = 0
+            runSearch(newValue, debounce: true)
+        }
     }
 
     private var resultsList: some View {

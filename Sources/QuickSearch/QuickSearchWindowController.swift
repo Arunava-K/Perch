@@ -26,18 +26,11 @@ final class QuickSearchWindowController {
         previousApp = NSWorkspace.shared.frontmostApplication
 
         if panel == nil {
-            let root = QuickSearchView(
-                store: store,
-                onPaste: { [weak self] item in self?.paste(item) },
-                onClose: { [weak self] in self?.close() }
-            )
-            let hosting = NSHostingView(rootView: root)
             let panel = QuickSearchPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 580, height: 420),
                 styleMask: [.borderless],
                 backing: .buffered, defer: false
             )
-            panel.contentView = hosting
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
@@ -46,6 +39,15 @@ final class QuickSearchWindowController {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             self.panel = panel
         }
+
+        // Fresh SwiftUI tree on each open: clears the query, refocuses the field,
+        // and reloads the recent list.
+        let root = QuickSearchView(
+            store: store,
+            onPaste: { [weak self] item in self?.paste(item) },
+            onClose: { [weak self] in self?.close() }
+        )
+        panel?.contentView = NSHostingView(rootView: root)
 
         positionCenter()
         NSApp.activate(ignoringOtherApps: true)

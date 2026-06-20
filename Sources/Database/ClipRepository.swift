@@ -39,6 +39,33 @@ final class ClipRepository {
         })?.compactMap { $0.toItem() } ?? []
     }
 
+    // MARK: Full-text search
+
+    /// Keyword search over active history via the FTS5 index, best matches first.
+    /// Thread-safe (GRDB serializes), so callers can run it off the main thread.
+    func search(_ query: String, limit: Int = 60) -> [ClipItem] {
+        guard let match = Self.ftsQuery(from: query) else { return [] }
+        return records(sql: """
+            SELECT clip.* FROM clip
+            JOIN clip_fts ON clip_fts.rowid = clip.rowid
+            WHERE clip_fts MATCH ? AND clip.container = 'history' AND clip.isTrashed = 0
+            ORDER BY clip_fts.rank, clip.position DESC
+            LIMIT ?
+            """, arguments: [match, limit])
+    }
+
+    /// Turn raw user text into a safe FTS5 prefix query: alphanumeric tokens,
+    /// each prefix-matched and AND-ed (e.g. "git clo" → "git* clo*"). Dropping
+    /// punctuation avoids FTS syntax errors from arbitrary input.
+    private static func ftsQuery(from text: String) -> String? {
+        let tokens = text
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        guard !tokens.isEmpty else { return nil }
+        return tokens.map { "\($0)*" }.joined(separator: " ")
+    }
+
     // MARK: Writing
 
     /// Insert a new item (or move an existing one to the front), updating its

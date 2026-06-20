@@ -212,6 +212,17 @@ final class ClipStore: ObservableObject {
     /// Whether on-device semantic search is usable on this machine.
     var semanticSearchAvailable: Bool { EmbeddingService.shared.isAvailable }
 
+    /// FTS-backed keyword search over the full history, run off the main thread
+    /// so typing stays smooth no matter how big the history. Empty query returns
+    /// the most recent clips. Shared by Quick Search (and, later, the Library).
+    func search(_ query: String, limit: Int = 60) async -> [ClipItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return Array(items.prefix(limit)) }
+        return await Task.detached(priority: .userInitiated) {
+            ClipRepository.shared.search(trimmed, limit: limit)
+        }.value
+    }
+
     /// Hybrid ranking: semantic similarity (cosine of normalized vectors) blended
     /// with a keyword-substring boost. Empty query returns the full history.
     /// Falls back to keyword-only when embeddings aren't available.
