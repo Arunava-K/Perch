@@ -7,6 +7,7 @@ import KeyboardShortcuts
 /// Settings: general behavior, history limits, shortcuts, permissions, about.
 struct SettingsView: View {
     @ObservedObject var registry: ModuleRegistry
+    @ObservedObject var calendar: CalendarManager
 
     @Default(.openNotchOnHover) private var openNotchOnHover
     @Default(.hapticFeedback) private var hapticFeedback
@@ -15,6 +16,7 @@ struct SettingsView: View {
     @Default(.skipSensitiveContent) private var skipSensitiveContent
     @Default(.stripFormattingByDefault) private var stripFormattingByDefault
     @Default(.plainTextApps) private var plainTextApps
+    @Default(.calendarEnabled) private var calendarEnabled
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var accessibilityGranted = AccessibilityPermission.isTrusted
@@ -64,6 +66,41 @@ struct SettingsView: View {
                     LabeledContent("Discard after", value: "\(historyMaxAgeDays) days")
                 }
                 Toggle("Skip passwords & sensitive content", isOn: $skipSensitiveContent)
+            }
+
+            Section {
+                Toggle("Show calendar & meetings in the notch", isOn: $calendarEnabled)
+                    .onChange(of: calendarEnabled) { _, on in
+                        calendar.setEnabled(on)
+                    }
+                if calendarEnabled, calendar.access == .denied {
+                    HStack {
+                        Label("Calendar access denied", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Open Settings…") { calendar.openSystemSettings() }
+                    }
+                }
+                if calendarEnabled, calendar.access == .granted, !calendar.calendars.isEmpty {
+                    ForEach(calendar.calendars) { cal in
+                        HStack(spacing: 10) {
+                            Circle().fill(cal.color).frame(width: 9, height: 9)
+                            Text(cal.title)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { !calendar.isCalendarHidden(cal.id) },
+                                set: { calendar.setCalendar(cal.id, hidden: !$0) }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+            } header: {
+                Text("Calendar")
+            } footer: {
+                Text("Shows today's agenda in a tab and counts down to your next meeting in the collapsed notch, with one-click Join for video calls. Requires Calendar access.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {

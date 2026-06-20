@@ -11,6 +11,8 @@ struct NotchRootView: View {
     @ObservedObject var music: MusicManager
     /// Drives the *collapsed* live countdown flank.
     @ObservedObject var timer: TimerEngine
+    /// Drives the *collapsed* meeting countdown flank.
+    @ObservedObject var calendar: CalendarManager
 
     @State private var dropTargeted = false
 
@@ -37,6 +39,9 @@ struct NotchRootView: View {
             alignment: .top
         )
         .ignoresSafeArea()
+        .onChange(of: registry.selectedID) { _, _ in
+            model.setExpandedHeight(registry.selected?.preferredExpandedHeight ?? 180)
+        }
     }
 
     private var notchShape: NotchShape {
@@ -101,6 +106,11 @@ struct NotchRootView: View {
         } else if model.isTimerActive {
             // Idle: countdown ring + remaining time flanking the camera.
             CollapsedTimerView(timer: timer)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
+        } else if model.isCalendarActive {
+            // Idle: calendar dot + meeting countdown flanking the camera.
+            CollapsedCalendarView(calendar: calendar)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity)
         } else if model.isMediaActive {

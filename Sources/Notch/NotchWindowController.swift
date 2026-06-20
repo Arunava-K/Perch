@@ -12,14 +12,18 @@ final class NotchWindowController {
     private let registry: ModuleRegistry
     private let music: MusicManager
     private let timer: TimerEngine
+    private let calendar: CalendarManager
     private var hoverTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
-    init(registry: ModuleRegistry, music: MusicManager, timer: TimerEngine) {
-        self.model = NotchViewModel(metrics: .current())
+    init(registry: ModuleRegistry, music: MusicManager, timer: TimerEngine, calendar: CalendarManager) {
+        let tallest = registry.allModules.map(\.preferredExpandedHeight).max() ?? 180
+        self.model = NotchViewModel(metrics: .current(), windowExpandedHeight: tallest)
         self.registry = registry
         self.music = music
         self.timer = timer
+        self.calendar = calendar
+        model.expandedHeight = registry.selected?.preferredExpandedHeight ?? 180
     }
 
     func show() {
@@ -30,7 +34,7 @@ final class NotchWindowController {
             model?.interactiveRect ?? .zero
         }
 
-        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer))
+        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer, calendar: calendar))
         hosting.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosting)
         panel.contentView = container
@@ -73,6 +77,21 @@ final class NotchWindowController {
         // Announce phase completions ("Break time", "Time's up") in the notch.
         timer.onActivity = { [weak self] symbol, text in
             self?.model.showMessage(symbol: symbol, text: text)
+        }
+
+        // Drive the collapsed meeting-countdown flank from the next event.
+        calendar.$isImminent
+            .removeDuplicates()
+            .sink { [weak self] imminent in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self?.model.isCalendarActive = imminent
+                }
+            }
+            .store(in: &cancellables)
+
+        // A few minutes before an event, pop a peek with a one-tap reminder.
+        calendar.onReminder = { [weak self] event in
+            self?.model.showMessage(symbol: "calendar", text: "\(event.title) · \(event.relativeString())")
         }
     }
 

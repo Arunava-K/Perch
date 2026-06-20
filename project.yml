@@ -53,6 +53,9 @@ targets:
         NSHumanReadableCopyright: "© 2026 Steiner & Co"
         # Required to query Apple Music / Spotify for now-playing via AppleScript.
         NSAppleEventsUsageDescription: "Mybar reads now-playing info from Apple Music and Spotify to show it in the notch."
+        # Required to show today's events and the next-meeting countdown (opt-in).
+        NSCalendarsUsageDescription: "Mybar shows your upcoming events and counts down to your next meeting in the notch."
+        NSCalendarsFullAccessUsageDescription: "Mybar shows your upcoming events and counts down to your next meeting in the notch."
         # Sparkle auto-update. Fill in before shipping (see RELEASING.md):
         #   SUFeedURL: your published appcast.xml URL
         #   SUPublicEDKey: the EdDSA public key from Sparkle's generate_keys

@@ -24,7 +24,11 @@ final class NotchViewModel: ObservableObject {
     @Published var isMediaActive = false
     /// True while a countdown is running — the collapsed notch shows a live timer.
     @Published var isTimerActive = false
+    /// True while the next event is imminent — the collapsed notch counts down to it.
+    @Published var isCalendarActive = false
     @Published var metrics: NotchMetrics
+    /// Expanded height of the currently-selected tab (modules can differ).
+    @Published var expandedHeight: CGFloat = 180
 
     /// Delay before collapsing after the cursor leaves, to avoid flicker when
     /// the pointer briefly crosses the rounded corners.
@@ -40,8 +44,19 @@ final class NotchViewModel: ObservableObject {
     /// Peek pop: a touch springier than open for a lively "emerge" feel.
     private let peekAnimation = Animation.spring(response: 0.34, dampingFraction: 0.66)
 
-    init(metrics: NotchMetrics) {
+    /// The window is fixed to the tallest possible tab so any tab fits without
+    /// resizing the window; shorter tabs just render within it.
+    let windowExpandedHeight: CGFloat
+
+    init(metrics: NotchMetrics, windowExpandedHeight: CGFloat = 180) {
         self.metrics = metrics
+        self.windowExpandedHeight = windowExpandedHeight
+    }
+
+    /// Animate to a tab's preferred height (called when the selected tab changes).
+    func setExpandedHeight(_ height: CGFloat) {
+        guard expandedHeight != height else { return }
+        withAnimation(openAnimation) { expandedHeight = height }
     }
 
     // MARK: Geometry
@@ -49,15 +64,13 @@ final class NotchViewModel: ObservableObject {
     /// Size of the notch shape when collapsed — hugs the hardware notch.
     var collapsedSize: CGSize { metrics.notchSize }
 
-    /// Standard expanded height — constant across tabs for a stable UX.
-    private let maxExpandedHeight: CGFloat = 180
     /// Slightly wider than before so the tab bar fits in the left "ear" beside
     /// the camera, letting the tabs pin to the very top.
     private var expandedWidth: CGFloat { max(metrics.notchSize.width + 520, 740) }
 
-    /// Size of the notch shape when expanded — same height for every tab.
+    /// Size of the notch shape when expanded — height varies per selected tab.
     var expandedSize: CGSize {
-        CGSize(width: expandedWidth, height: maxExpandedHeight)
+        CGSize(width: expandedWidth, height: expandedHeight)
     }
 
     /// Size of the notch during a sneak-peek — a compact pill below the camera.
@@ -80,10 +93,15 @@ final class NotchViewModel: ObservableObject {
         CGSize(width: metrics.notchSize.width + 118, height: metrics.notchSize.height)
     }
 
+    /// Up-next size — calendar dot + meeting countdown flanking the camera.
+    var calendarSize: CGSize {
+        CGSize(width: metrics.notchSize.width + 118, height: metrics.notchSize.height)
+    }
+
     /// The window is always sized to the largest state so content can animate
     /// inside it without resizing the window itself.
     var windowSize: CGSize {
-        CGSize(width: expandedWidth, height: maxExpandedHeight)
+        CGSize(width: expandedWidth, height: windowExpandedHeight)
     }
 
     var currentNotchSize: CGSize {
@@ -93,6 +111,7 @@ final class NotchViewModel: ObservableObject {
             return peekSize
         }
         if isTimerActive { return timerSize }
+        if isCalendarActive { return calendarSize }
         if isMediaActive { return collapsedMediaSize }
         return collapsedSize
     }

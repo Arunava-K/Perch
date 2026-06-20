@@ -38,6 +38,14 @@ extension Defaults.Keys {
     /// Whether we've shown the Accessibility prompt at least once.
     static let didPromptAccessibility = Key<Bool>("didPromptAccessibility", default: false)
 
+    // MARK: Calendar
+
+    /// Opt-in: read today's events and show the agenda tab + meeting countdown.
+    static let calendarEnabled = Key<Bool>("calendarEnabled", default: false)
+
+    /// Event-calendar ids the user has hidden from the notch (empty = show all).
+    static let hiddenCalendarIDs = Key<[String]>("hiddenCalendarIDs", default: [])
+
     // MARK: Modules / tabs
 
     /// Module ids in display order (empty = registration order).

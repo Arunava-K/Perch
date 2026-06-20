@@ -344,8 +344,15 @@ tabs to icons, so it scales to many modules.
   presets, pause/resume/stop/skip) with a live countdown ring + remaining time
   flanking the camera in the collapsed notch; phase changes announced via a
   message peek; chimes on completion.
-- ⚪ **Calendar / Up Next** — EventKit agenda + a live activity counting down to
-  the next event with a one-click join.
+- 🟢 **Calendar / Up Next** — EventKit agenda tab (today's events, next meeting
+  emphasized, one-click Join for Zoom/Meet/Teams/Webex, "Open in Calendar"
+  fallback + tappable rows) + a collapsed live activity counting down to the next
+  event, with a peek reminder ~5 min before. Per-calendar show/hide in Settings.
+  **Opt-in** (`Defaults[.calendarEnabled]` + Calendar full-access grant); nothing
+  reads events until the user enables it in Settings or the in-notch prompt.
+  EventKit is confined to a `CalendarService` behind a protocol (boring.notch /
+  Calendr pattern); `CalendarManager` holds only state and is fake-service
+  testable.
 - ⚪ **AI (Claude)** — ask Claude, summarize/transform the current clip, smart
   paste, translate (Anthropic API). The key differentiator.
 - ⚪ **Weather**, **Battery & system stats**, **Webcam mirror**,

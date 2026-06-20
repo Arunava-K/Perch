@@ -20,6 +20,8 @@ protocol NotchModule: AnyObject {
     var icon: String { get }
     /// A live dot on the tab (e.g. music playing).
     var indicator: Bool { get }
+    /// Preferred height of the expanded notch while this module's tab is shown.
+    var preferredExpandedHeight: CGFloat { get }
     /// Whether items dropped on the notch should route here.
     var acceptsDrops: Bool { get }
     func handleDrop(_ providers: [NSItemProvider])
@@ -29,6 +31,7 @@ protocol NotchModule: AnyObject {
 
 extension NotchModule {
     var indicator: Bool { false }
+    var preferredExpandedHeight: CGFloat { 180 }
     var acceptsDrops: Bool { false }
     func handleDrop(_ providers: [NSItemProvider]) {}
 }

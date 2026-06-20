@@ -7,15 +7,17 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let registry: ModuleRegistry
+    private let calendar: CalendarManager
     private var window: NSWindow?
 
-    init(registry: ModuleRegistry) {
+    init(registry: ModuleRegistry, calendar: CalendarManager) {
         self.registry = registry
+        self.calendar = calendar
     }
 
     func show() {
         if window == nil {
-            let hosting = NSHostingController(rootView: SettingsView(registry: registry))
+            let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar))
             let window = NSWindow(contentViewController: hosting)
             window.title = "Mybar Settings"
             window.styleMask = [.titled, .closable, .miniaturizable]

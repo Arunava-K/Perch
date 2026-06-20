@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notificationMonitor: NotificationMonitor?
     private var shelfStore: ShelfStore?
     private var timerEngine: TimerEngine?
+    private var calendarManager: CalendarManager?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
 
@@ -43,17 +44,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let timerEngine = TimerEngine()
         self.timerEngine = timerEngine
 
+        // Calendar / Up Next: today's agenda tab + collapsed meeting countdown.
+        // Opt-in — only reads events once the user enables it in Settings.
+        let calendarManager = CalendarManager()
+        self.calendarManager = calendarManager
+
         // Register the notch modules (tab order = registration order).
         let registry = ModuleRegistry(modules: [
             ClipboardModule(store: clipStore),
-            PinnedModule(store: clipStore),
             ShelfModule(shelf: shelfStore),
             TimerModule(timer: timerEngine),
+            CalendarModule(calendar: calendarManager),
             MusicModule(music: musicManager),
         ])
         self.moduleRegistry = registry
 
-        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine)
+        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager)
         notchController.show()
         self.notchController = notchController
 
@@ -115,7 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let libraryController = LibraryWindowController(store: clipStore)
         self.libraryController = libraryController
 
-        let settingsController = SettingsWindowController(registry: registry)
+        // Start reading calendar events only if the user opted in previously.
+        calendarManager.startIfEnabled()
+
+        let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager)
         self.settingsController = settingsController
 
         statusBarController = StatusBarController(
