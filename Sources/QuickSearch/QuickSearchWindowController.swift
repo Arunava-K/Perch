@@ -27,7 +27,7 @@ final class QuickSearchWindowController {
 
         if panel == nil {
             let panel = QuickSearchPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 580, height: 420),
+                contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
                 styleMask: [.borderless],
                 backing: .buffered, defer: false
             )
@@ -44,7 +44,7 @@ final class QuickSearchWindowController {
         // and reloads the recent list.
         let root = QuickSearchView(
             store: store,
-            onPaste: { [weak self] item in self?.paste(item) },
+            onPaste: { [weak self] item, forcePlain in self?.paste(item, forcePlain: forcePlain) },
             onClose: { [weak self] in self?.close() }
         )
         panel?.contentView = NSHostingView(rootView: root)
@@ -58,12 +58,12 @@ final class QuickSearchWindowController {
         panel?.orderOut(nil)
     }
 
-    private func paste(_ item: ClipItem) {
+    private func paste(_ item: ClipItem, forcePlain: Bool) {
         close()
         // Restore the user's app, then paste into it.
         previousApp?.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            PasteService.paste(item)
+            PasteService.paste(item, forcePlain: forcePlain ? true : nil)
         }
     }
 
