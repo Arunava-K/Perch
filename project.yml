@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.steinerco
   createIntermediateGroups: true
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
 
 packages:
   Defaults:

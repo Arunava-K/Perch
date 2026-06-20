@@ -4,72 +4,39 @@ import UniformTypeIdentifiers
 import Defaults
 import KeyboardShortcuts
 
-/// The Settings window: a sidebar of grouped panes (General, Clipboard,
-/// Notifications, Calendar, Tabs, Shortcuts, About) with a detail form on the
-/// right, matching the modern macOS System Settings shape.
+/// The Settings window: native System-Settings-style sidebar via
+/// `TabView(.sidebarAdaptable)`, one tab per grouped pane.
 struct SettingsView: View {
     @ObservedObject var registry: ModuleRegistry
     @ObservedObject var calendar: CalendarManager
 
-    @State private var selection: SettingsPane? = .general
-
     var body: some View {
-        NavigationSplitView {
-            List(SettingsPane.allCases, selection: $selection) { pane in
-                Label(pane.title, systemImage: pane.icon)
-                    .tag(pane)
+        TabView {
+            Tab("General", systemImage: "gearshape") {
+                GeneralPane()
             }
-            .navigationSplitViewColumnWidth(min: 178, ideal: 196, max: 230)
-        } detail: {
-            detail(for: selection ?? .general)
-                .formStyle(.grouped)
-                .navigationTitle((selection ?? .general).title)
+            Tab("Clipboard", systemImage: "doc.on.clipboard") {
+                ClipboardPane()
+            }
+            Tab("Notifications", systemImage: "bell.badge") {
+                NotificationsPane()
+            }
+            Tab("Calendar", systemImage: "calendar") {
+                CalendarPane(calendar: calendar)
+            }
+            Tab("Tabs", systemImage: "square.grid.2x2") {
+                TabsPane(registry: registry)
+            }
+            Tab("Shortcuts", systemImage: "keyboard") {
+                ShortcutsPane()
+            }
+            Tab("About", systemImage: "info.circle") {
+                AboutPane()
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
+        .formStyle(.grouped)
         .frame(minWidth: 680, idealWidth: 720, minHeight: 460, idealHeight: 540)
-    }
-
-    @ViewBuilder
-    private func detail(for pane: SettingsPane) -> some View {
-        switch pane {
-        case .general: GeneralPane()
-        case .clipboard: ClipboardPane()
-        case .notifications: NotificationsPane()
-        case .calendar: CalendarPane(calendar: calendar)
-        case .tabs: TabsPane(registry: registry)
-        case .shortcuts: ShortcutsPane()
-        case .about: AboutPane()
-        }
-    }
-}
-
-/// The sidebar categories.
-enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, clipboard, notifications, calendar, tabs, shortcuts, about
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .general: return "General"
-        case .clipboard: return "Clipboard"
-        case .notifications: return "Notifications"
-        case .calendar: return "Calendar"
-        case .tabs: return "Tabs"
-        case .shortcuts: return "Shortcuts"
-        case .about: return "About"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .general: return "gearshape"
-        case .clipboard: return "doc.on.clipboard"
-        case .notifications: return "bell.badge"
-        case .calendar: return "calendar"
-        case .tabs: return "square.grid.2x2"
-        case .shortcuts: return "keyboard"
-        case .about: return "info.circle"
-        }
     }
 }
 
