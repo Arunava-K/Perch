@@ -39,13 +39,7 @@ struct ClipPreview: View {
             }
 
         case .image(let blobFile, _, _, _):
-            if let image = NSImage(contentsOf: BlobStore.shared.url(for: blobFile)) {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                fallbackIcon("photo")
-            }
+            ImageThumbnail(blobFile: blobFile, maxPixel: compact ? 320 : 600)
 
         case .file(_, let path, _):
             FileThumbnail(path: path, size: CGSize(width: 64, height: 64))
@@ -67,6 +61,32 @@ struct ClipPreview: View {
             .font(.system(size: 22))
             .foregroundStyle(.white.opacity(0.6))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Async-loading, downsampled thumbnail for a stored image blob. Decodes off the
+/// main thread via the cached `ThumbnailService` instead of loading the full
+/// image in the view body.
+struct ImageThumbnail: View {
+    let blobFile: String
+    var maxPixel: CGFloat = 320
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Color.white.opacity(0.04)
+            }
+        }
+        .task(id: blobFile) {
+            let url = BlobStore.shared.url(for: blobFile)
+            image = await ThumbnailService.shared.imageThumbnail(at: url, maxPixel: maxPixel)
+        }
     }
 }
 

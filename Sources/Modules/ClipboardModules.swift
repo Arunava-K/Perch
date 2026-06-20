@@ -8,8 +8,16 @@ struct ClipStripTab: View {
     @State private var pinnedOnly = false
     @Namespace private var seg
 
+    /// The notch is for quick access only — show recent clips plus any pins, and
+    /// leave the full history to Quick Search (⌃⌘V) and the Library window. This
+    /// keeps the card strip cheap to build/scroll no matter how big the history.
+    private static let recentLimit = 20
+
     private var items: [ClipItem] {
-        pinnedOnly ? store.items.filter { $0.isPinned } : store.items
+        if pinnedOnly { return store.items.filter { $0.isPinned } }
+        let recent = store.items.prefix(Self.recentLimit)
+        let olderPinned = store.items.dropFirst(Self.recentLimit).filter { $0.isPinned }
+        return Array(recent) + Array(olderPinned)
     }
 
     var body: some View {

@@ -87,14 +87,8 @@ struct ClipCardView: View {
             }
 
         case .image(let blobFile, _, _, _):
-            if let image = NSImage(contentsOf: BlobStore.shared.url(for: blobFile)) {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                placeholder("photo")
-            }
+            ImageThumbnail(blobFile: blobFile, maxPixel: 320)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .file(_, let path, _):
             FileThumbnail(path: path, size: CGSize(width: 80, height: 80))
@@ -151,13 +145,6 @@ struct ClipCardView: View {
         default:
             return nil
         }
-    }
-
-    private func placeholder(_ symbol: String) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 22))
-            .foregroundStyle(.white.opacity(0.5))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: Footer
