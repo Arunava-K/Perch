@@ -14,6 +14,9 @@ final class TimerModule: NotchModule {
 
     var indicator: Bool { timer.isRunning }
 
+    /// Tall enough for the Pomodoro ring beside the quick-timer list.
+    var preferredExpandedHeight: CGFloat { 230 }
+
     func makeContent(_ context: ModuleContext) -> AnyView {
         AnyView(TimerTab(timer: timer))
     }

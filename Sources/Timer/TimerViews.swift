@@ -69,9 +69,13 @@ struct MessagePeekView: View {
     }
 }
 
-/// The Timer tab: idle presets, or running controls with a big countdown ring.
+/// The Timer tab: a Pomodoro hero + quick-timer grid when idle, or a big
+/// countdown ring with controls (and Pomodoro cycle dots) while running.
 struct TimerTab: View {
     @ObservedObject var timer: TimerEngine
+
+    private let quickPresets = [5, 15, 25, 45]
+    private var focusColor: Color { TimerEngine.Phase.focus.color }
 
     var body: some View {
         Group {
@@ -82,113 +86,188 @@ struct TimerTab: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: timer.isRunning)
+    }
+
+    // MARK: Idle
+
+    private var idleView: some View {
+        HStack(spacing: 22) {
+            pomodoroStarter
+                .frame(maxWidth: .infinity)
+
+            Rectangle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 1)
+                .padding(.vertical, 6)
+
+            quickTimer
+                .frame(maxWidth: .infinity)
+        }
+        .transition(.blurFade)
+    }
+
+    /// A ring with a play button — tap to start a Pomodoro. Echoes the running
+    /// ring so idle and active states share one visual language.
+    private var pomodoroStarter: some View {
+        Button { timer.startPomodoro() } label: {
+            VStack(spacing: 11) {
+                ZStack {
+                    Circle()
+                        .stroke(focusColor.opacity(0.18), lineWidth: 4)
+                    Circle()
+                        .trim(from: 0, to: 0.28)
+                        .stroke(focusColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .offset(x: 1)
+                }
+                .frame(width: 78, height: 78)
+
+                VStack(spacing: 2) {
+                    Text("Pomodoro")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("25 min focus · 5 min break")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private var quickTimer: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Quick Timer")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(.white.opacity(0.4))
+                .padding(.leading, 2)
+
+            ForEach(quickPresets, id: \.self) { minutes in
+                Button { timer.startCustom(minutes: minutes) } label: {
+                    HStack(spacing: 11) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(focusColor)
+                            .frame(width: 16)
+                        Text("\(minutes) min")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 0)
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.25))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(.white.opacity(0.05))
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Running
 
     private var runningView: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 34) {
             ZStack {
-                TimerRing(progress: timer.progress, color: timer.phase.color, lineWidth: 5)
-                    .frame(width: 92, height: 92)
-                VStack(spacing: 1) {
+                TimerRing(progress: timer.progress, color: timer.phase.color, lineWidth: 6)
+                    .frame(width: 120, height: 120)
+                VStack(spacing: 3) {
                     Text(timer.remainingString)
-                        .font(.system(size: 23, weight: .semibold, design: .rounded))
+                        .font(.system(size: 31, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(.white)
-                    if timer.isPaused {
-                        Text("Paused")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .textCase(.uppercase)
-                    }
+                    Text(phaseTagline)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .tracking(0.6)
+                        .textCase(.uppercase)
+                        .foregroundStyle(timer.isPaused ? .white.opacity(0.45) : timer.phase.color)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(timer.isPomodoro ? timer.phase.title : "Timer")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 7) {
+                        Image(systemName: timer.phase.symbol)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(timer.phase.color)
+                        Text(timer.isPomodoro ? timer.phase.title : "Timer")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
                     if timer.isPomodoro {
-                        Text(sessionLabel)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.55))
+                        cycleDots
                     }
                 }
 
-                HStack(spacing: 10) {
-                    iconButton(timer.isPaused ? "play.fill" : "pause.fill", primary: true) {
-                        timer.toggle()
+                HStack(spacing: 12) {
+                    Button { timer.toggle() } label: {
+                        Image(systemName: timer.isPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.black)
+                            .frame(width: 46, height: 46)
+                            .background(Circle().fill(timer.phase.color))
+                            .contentShape(Circle())
                     }
+                    .buttonStyle(PressableStyle())
+
                     iconButton("stop.fill") { timer.stop() }
                     if timer.isPomodoro {
                         iconButton("forward.end.fill") { timer.skip() }
                     }
                 }
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 30)
+        .frame(maxWidth: .infinity)
         .transition(.blurFade)
+    }
+
+    private var phaseTagline: String {
+        if timer.isPaused { return "Paused" }
+        return timer.isPomodoro ? timer.phase.title : "Focus"
+    }
+
+    /// Four dots tracking progress through the focus → long-break cycle.
+    private var cycleDots: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<4, id: \.self) { i in
+                Circle()
+                    .fill(i < completedInCycle ? timer.phase.color : .white.opacity(0.18))
+                    .frame(width: 7, height: 7)
+            }
+            Text(sessionLabel)
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.55))
+                .padding(.leading, 4)
+        }
+    }
+
+    /// Focus sessions completed within the current 4-session cycle (4 on the long break).
+    private var completedInCycle: Int {
+        let n = timer.completedFocusSessions % 4
+        return (n == 0 && timer.completedFocusSessions > 0) ? 4 : n
     }
 
     private var sessionLabel: String {
-        let n = timer.completedFocusSessions
         if timer.phase.isBreak {
-            return "After \(n) focus session\(n == 1 ? "" : "s")"
+            return "Break"
         }
-        return "Session \(n + 1)"
-    }
-
-    // MARK: Idle
-
-    private let quickPresets = [5, 15, 25, 45]
-
-    private var idleView: some View {
-        VStack(spacing: 14) {
-            Button { timer.startPomodoro() } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 16, weight: .semibold))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Pomodoro")
-                            .font(.system(size: 13.5, weight: .semibold))
-                        Text("25 min focus · 5 min break")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(
-                    Capsule().fill(TimerEngine.Phase.focus.color.opacity(0.22))
-                )
-                .overlay(Capsule().strokeBorder(TimerEngine.Phase.focus.color.opacity(0.5), lineWidth: 1))
-                .contentShape(Capsule())
-            }
-            .buttonStyle(PressableStyle())
-
-            HStack(spacing: 9) {
-                ForEach(quickPresets, id: \.self) { minutes in
-                    Button { timer.startCustom(minutes: minutes) } label: {
-                        Text("\(minutes)m")
-                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .frame(width: 48, height: 32)
-                            .background(Capsule().fill(.white.opacity(0.1)))
-                            .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(PressableStyle())
-                }
-            }
-        }
-        .transition(.blurFade)
+        return "Session \(timer.completedFocusSessions + 1)"
     }
 
     // MARK: Controls
@@ -198,7 +277,7 @@ struct TimerTab: View {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
+                .frame(width: 36, height: 36)
                 .background(Circle().fill(.white.opacity(primary ? 0.2 : 0.1)))
                 .contentShape(Circle())
         }
