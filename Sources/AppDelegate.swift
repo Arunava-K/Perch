@@ -163,7 +163,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        let quickSearchController = QuickSearchWindowController(store: clipStore)
+        // App commands surfaced in the Quick Search palette's Commands section.
+        let paletteCommands: [PaletteCommand] = [
+            PaletteCommand(id: "toggle-notch", title: "Toggle Notch",
+                           subtitle: "Open or close the notch panel.",
+                           icon: "rectangle.topthird.inset.filled",
+                           keywords: ["notch", "show", "hide", "panel"]) { [weak notchController] in
+                notchController?.toggle()
+            },
+            PaletteCommand(id: "clipboard-history", title: "Open Clipboard History",
+                           subtitle: "Browse the full clipboard library.",
+                           icon: "clock.arrow.circlepath",
+                           keywords: ["history", "library", "clips"]) { [weak libraryController] in
+                libraryController?.show()
+            },
+            PaletteCommand(id: "open-settings", title: "Open Settings",
+                           subtitle: "Adjust Mybar's preferences.",
+                           icon: "gearshape",
+                           keywords: ["settings", "preferences", "config"]) { [weak settingsController] in
+                settingsController?.show()
+            },
+            PaletteCommand(id: "start-focus", title: "Start Focus Session",
+                           subtitle: "Begin a Pomodoro focus timer.",
+                           icon: "timer",
+                           keywords: ["timer", "focus", "pomodoro", "start"]) { [weak timerEngine] in
+                timerEngine?.startPomodoro()
+            },
+            PaletteCommand(id: "start-timer-5", title: "Start 5-Minute Timer",
+                           subtitle: "Begin a quick 5-minute countdown.",
+                           icon: "timer",
+                           keywords: ["timer", "5", "quick", "countdown"]) { [weak timerEngine] in
+                timerEngine?.startCustom(minutes: 5)
+            },
+            PaletteCommand(id: "stop-timer", title: "Stop Timer",
+                           subtitle: "Cancel the running timer.",
+                           icon: "stop.circle",
+                           keywords: ["timer", "stop", "cancel"]) { [weak timerEngine] in
+                timerEngine?.stop()
+            },
+            PaletteCommand(id: "clear-history", title: "Clear Clipboard History",
+                           subtitle: "Trash all unpinned clips.",
+                           icon: "trash",
+                           keywords: ["clear", "delete", "history", "empty"]) { [weak clipStore] in
+                clipStore?.clear()
+            },
+            PaletteCommand(id: "check-updates", title: "Check for Updates",
+                           subtitle: "See if a newer Mybar is available.",
+                           icon: "arrow.down.circle",
+                           keywords: ["update", "upgrade", "version"]) {
+                UpdaterController.shared.checkForUpdates()
+            },
+        ]
+
+        let quickSearchController = QuickSearchWindowController(store: clipStore, commands: paletteCommands)
         self.quickSearchController = quickSearchController
 
         // Global toggle hotkey (default ⌘⇧B, rebindable in Settings).

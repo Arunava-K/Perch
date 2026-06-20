@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// A Raycast-style clipboard palette: grouped results on the left, a live detail
-/// preview on the right, a persistent action bar at the bottom, and a ⌘K actions
-/// menu. Type to filter, ↑/↓ to move, ⏎ to paste, Esc to dismiss.
+/// A Raycast-style command palette: grouped results on the left (app Commands +
+/// clipboard), a live detail preview on the right, a persistent action bar, and
+/// a ⌘K actions menu. Type to filter, ↑/↓ to move, ⏎ to run/paste, Esc to close.
 struct QuickSearchView: View {
     @ObservedObject var store: ClipStore
+    /// App commands shown in the Commands section.
+    var commands: [PaletteCommand]
     /// Paste the item into the previously-active app. `forcePlain` strips formatting.
     var onPaste: (ClipItem, Bool) -> Void
     var onClose: () -> Void
@@ -17,6 +19,19 @@ struct QuickSearchView: View {
     @State private var actionsShown = false
     @State private var actionSelection = 0
     @FocusState private var focused: Bool
+
+    /// A palette row is either a clipboard clip or an app command.
+    enum Entry: Identifiable {
+        case clip(ClipItem)
+        case command(PaletteCommand)
+
+        var id: String {
+            switch self {
+            case .clip(let c): return "clip-\(c.id)"
+            case .command(let c): return "cmd-\(c.id)"
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -77,25 +92,33 @@ struct QuickSearchView: View {
 
     // MARK: Grouping
 
-    /// Results split into titled sections. Empty query → Pinned / Recent;
-    /// an active query → a single Results section.
-    private var groups: [(title: String, items: [ClipItem])] {
+    private var matchedCommands: [PaletteCommand] {
+        query.isEmpty ? commands : commands.filter { $0.matches(query) }
+    }
+
+    /// Results split into titled sections. Idle → Pinned / Recent / Commands;
+    /// an active query → matched Commands first, then Clipboard.
+    private var groups: [(title: String, entries: [Entry])] {
+        var g: [(String, [Entry])] = []
         if query.isEmpty {
             let pinned = results.filter(\.isPinned)
             let recent = results.filter { !$0.isPinned }
-            var g: [(String, [ClipItem])] = []
-            if !pinned.isEmpty { g.append(("Pinned", pinned)) }
-            if !recent.isEmpty { g.append(("Recent", recent)) }
-            return g
+            if !pinned.isEmpty { g.append(("Pinned", pinned.map(Entry.clip))) }
+            if !recent.isEmpty { g.append(("Recent", recent.map(Entry.clip))) }
+            if !commands.isEmpty { g.append(("Commands", commands.map(Entry.command))) }
+        } else {
+            let cmds = matchedCommands
+            if !cmds.isEmpty { g.append(("Commands", cmds.map(Entry.command))) }
+            if !results.isEmpty { g.append(("Clipboard", results.map(Entry.clip))) }
         }
-        return results.isEmpty ? [] : [("Results", results)]
+        return g
     }
 
-    /// Flattened, section-ordered items — the basis for keyboard selection.
-    private var flatItems: [ClipItem] { groups.flatMap(\.items) }
+    /// Flattened, section-ordered entries — the basis for keyboard selection.
+    private var flatEntries: [Entry] { groups.flatMap(\.entries) }
 
-    private var selectedItem: ClipItem? {
-        flatItems.indices.contains(selection) ? flatItems[selection] : nil
+    private var selectedEntry: Entry? {
+        flatEntries.indices.contains(selection) ? flatEntries[selection] : nil
     }
 
     // MARK: Search field
@@ -103,7 +126,7 @@ struct QuickSearchView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search clipboard…", text: $query)
+            TextField("Search clips and commands…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .focused($focused)
@@ -122,8 +145,8 @@ struct QuickSearchView: View {
     private var resultsList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                if flatItems.isEmpty {
-                    Text(query.isEmpty ? "No clips yet" : "No Results")
+                if flatEntries.isEmpty {
+                    Text("No Results")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
@@ -136,9 +159,9 @@ struct QuickSearchView: View {
                                 .padding(.horizontal, 14)
                                 .padding(.top, 10)
                                 .padding(.bottom, 2)
-                            ForEach(group.items) { item in
-                                let index = flatItems.firstIndex { $0.id == item.id } ?? 0
-                                QuickSearchRow(item: item, selected: index == selection)
+                            ForEach(group.entries) { entry in
+                                let index = flatEntries.firstIndex { $0.id == entry.id } ?? 0
+                                PaletteRow(entry: entry, selected: index == selection)
                                     .id(index)
                                     .contentShape(Rectangle())
                                     .onTapGesture { selection = index; activatePrimary() }
@@ -159,24 +182,53 @@ struct QuickSearchView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let item = selectedItem {
-            VStack(alignment: .leading, spacing: 14) {
-                ClipPreview(item: item, compact: false, imageContentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: 230)
-                    .clipped()
-                Divider()
-                VStack(spacing: 8) {
-                    ForEach(metadata(for: item), id: \.0) { row in
-                        metaRow(row.0, row.1)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else {
+        switch selectedEntry {
+        case .clip(let item):
+            clipDetail(item)
+        case .command(let cmd):
+            commandDetail(cmd)
+        case nil:
             Color.clear
         }
+    }
+
+    private func clipDetail(_ item: ClipItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ClipPreview(item: item, compact: false, imageContentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: 230)
+                .clipped()
+            Divider()
+            VStack(spacing: 8) {
+                ForEach(metadata(for: item), id: \.0) { row in
+                    metaRow(row.0, row.1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func commandDetail(_ cmd: PaletteCommand) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: cmd.icon)
+                    .font(.system(size: 26))
+                    .frame(width: 48, height: 48)
+                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(cmd.title).font(.system(size: 15, weight: .semibold))
+                    Text("Command").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            Divider()
+            Text(cmd.subtitle)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func metaRow(_ label: String, _ value: String) -> some View {
@@ -211,7 +263,7 @@ struct QuickSearchView: View {
 
     private var actionBar: some View {
         HStack(spacing: 0) {
-            if let item = selectedItem, let primary = actions(for: item).first {
+            if let entry = selectedEntry, let primary = actions(for: entry).first {
                 Button(action: activatePrimary) {
                     HStack(spacing: 6) {
                         Image(systemName: primary.symbol)
@@ -240,9 +292,9 @@ struct QuickSearchView: View {
 
     @ViewBuilder
     private var actionsMenu: some View {
-        if let item = selectedItem {
+        if let entry = selectedEntry {
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(Array(actions(for: item).enumerated()), id: \.element.id) { index, action in
+                ForEach(Array(actions(for: entry).enumerated()), id: \.element.id) { index, action in
                     Button { run(action) } label: {
                         HStack(spacing: 10) {
                             Image(systemName: action.symbol).frame(width: 18)
@@ -281,7 +333,19 @@ struct QuickSearchView: View {
         let perform: () -> Void
     }
 
-    private func actions(for item: ClipItem) -> [PaletteAction] {
+    private func actions(for entry: Entry) -> [PaletteAction] {
+        switch entry {
+        case .command(let cmd):
+            return [PaletteAction(title: "Run Command", symbol: cmd.icon, shortcut: "⏎") {
+                cmd.perform()
+                onClose()
+            }]
+        case .clip(let item):
+            return clipActions(item)
+        }
+    }
+
+    private func clipActions(_ item: ClipItem) -> [PaletteAction] {
         var list: [PaletteAction] = [
             PaletteAction(title: "Paste", symbol: "doc.on.clipboard", shortcut: "⏎") {
                 onPaste(item, false)
@@ -320,8 +384,8 @@ struct QuickSearchView: View {
     }
 
     private func activatePrimary() {
-        guard let item = selectedItem else { return }
-        actions(for: item).first?.perform()
+        guard let entry = selectedEntry else { return }
+        actions(for: entry).first?.perform()
     }
 
     private func toggleActions() {
@@ -343,7 +407,10 @@ struct QuickSearchView: View {
             case .downArrow: moveAction(1); return .handled
             case .upArrow: moveAction(-1); return .handled
             case .return:
-                if let item = selectedItem { run(actions(for: item)[actionSelection]) }
+                if let entry = selectedEntry {
+                    let list = actions(for: entry)
+                    if list.indices.contains(actionSelection) { run(list[actionSelection]) }
+                }
                 return .handled
             case .escape: toggleActions(); return .handled
             default:
@@ -375,28 +442,28 @@ struct QuickSearchView: View {
         return .ignored
     }
 
-    /// Fire the action whose displayed shortcut matches (so the ⌘K labels and the
-    /// direct keys stay in sync from a single source of truth).
+    /// Fire the selected entry's action whose displayed shortcut matches (so the
+    /// ⌘K labels and the direct keys stay in sync from one source of truth).
     private func runShortcut(_ shortcut: String) {
-        guard let item = selectedItem,
-              let action = actions(for: item).first(where: { $0.shortcut == shortcut })
+        guard let entry = selectedEntry,
+              let action = actions(for: entry).first(where: { $0.shortcut == shortcut })
         else { return }
         action.perform()
     }
 
     private func move(_ delta: Int) {
-        guard !flatItems.isEmpty else { return }
-        selection = min(max(0, selection + delta), flatItems.count - 1)
+        guard !flatEntries.isEmpty else { return }
+        selection = min(max(0, selection + delta), flatEntries.count - 1)
     }
 
     private func moveAction(_ delta: Int) {
-        guard let item = selectedItem else { return }
-        let count = actions(for: item).count
+        guard let entry = selectedEntry else { return }
+        let count = actions(for: entry).count
         actionSelection = min(max(0, actionSelection + delta), count - 1)
     }
 
     private func clampSelection() {
-        if selection >= flatItems.count { selection = max(0, flatItems.count - 1) }
+        if selection >= flatEntries.count { selection = max(0, flatEntries.count - 1) }
     }
 }
 
@@ -414,8 +481,9 @@ private struct KeyChip: View {
     }
 }
 
-private struct QuickSearchRow: View {
-    let item: ClipItem
+/// One palette row — a clip or a command.
+private struct PaletteRow: View {
+    let entry: QuickSearchView.Entry
     let selected: Bool
 
     var body: some View {
@@ -423,15 +491,11 @@ private struct QuickSearchRow: View {
             Image(systemName: symbol)
                 .frame(width: 20)
                 .foregroundStyle(selected ? .white : .secondary)
-            Text(item.kind.previewText.replacingOccurrences(of: "\n", with: " "))
+            Text(title)
                 .lineLimit(1)
                 .foregroundStyle(selected ? .white : .primary)
             Spacer()
-            if item.isPinned {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(selected ? .white.opacity(0.8) : .secondary)
-            }
+            trailing
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -439,14 +503,41 @@ private struct QuickSearchRow: View {
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
+    @ViewBuilder
+    private var trailing: some View {
+        switch entry {
+        case .command:
+            Text("Command")
+                .font(.caption)
+                .foregroundStyle(selected ? .white.opacity(0.7) : .secondary)
+        case .clip(let item):
+            if item.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(selected ? .white.opacity(0.8) : .secondary)
+            }
+        }
+    }
+
+    private var title: String {
+        switch entry {
+        case .command(let c): return c.title
+        case .clip(let c): return c.kind.previewText.replacingOccurrences(of: "\n", with: " ")
+        }
+    }
+
     private var symbol: String {
-        switch item.kind {
-        case .text: return "textformat"
-        case .link: return "link"
-        case .color: return "paintpalette"
-        case .image: return "photo"
-        case .file: return "doc"
-        case .locked: return "lock.fill"
+        switch entry {
+        case .command(let c): return c.icon
+        case .clip(let c):
+            switch c.kind {
+            case .text: return "textformat"
+            case .link: return "link"
+            case .color: return "paintpalette"
+            case .image: return "photo"
+            case .file: return "doc"
+            case .locked: return "lock.fill"
+            }
         }
     }
 }

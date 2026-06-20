@@ -11,11 +11,13 @@ private final class QuickSearchPanel: NSPanel {
 @MainActor
 final class QuickSearchWindowController {
     private let store: ClipStore
+    private let commands: [PaletteCommand]
     private var panel: QuickSearchPanel?
     private weak var previousApp: NSRunningApplication?
 
-    init(store: ClipStore) {
+    init(store: ClipStore, commands: [PaletteCommand]) {
         self.store = store
+        self.commands = commands
     }
 
     func toggle() {
@@ -44,6 +46,7 @@ final class QuickSearchWindowController {
         // and reloads the recent list.
         let root = QuickSearchView(
             store: store,
+            commands: commands,
             onPaste: { [weak self] item, forcePlain in self?.paste(item, forcePlain: forcePlain) },
             onClose: { [weak self] in self?.close() }
         )
