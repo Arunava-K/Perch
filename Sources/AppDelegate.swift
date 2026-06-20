@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mediaKeyTap: MediaKeyTap?
     private var powerMonitor: PowerMonitor?
     private var notificationMonitor: NotificationMonitor?
+    private var focusPairing: FocusPairingController?
     private var shelfStore: ShelfStore?
     private var timerEngine: TimerEngine?
     private var calendarManager: CalendarManager?
@@ -126,6 +127,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notificationMonitor.activate()
         self.notificationMonitor = notificationMonitor
 
+        // Optional Focus pairing: while mirroring is on, turn on a user Focus so
+        // the notch replaces native banners instead of duplicating them.
+        let focusPairing = FocusPairingController()
+        focusPairing.activate()
+        self.focusPairing = focusPairing
+
         let libraryController = LibraryWindowController(store: clipStore)
         self.libraryController = libraryController
 
@@ -195,5 +202,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func screenConfigurationChanged() {
         notchController?.relayout()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Don't leave the user stuck in the paired Focus after Mybar quits.
+        focusPairing?.deactivateForQuit()
     }
 }

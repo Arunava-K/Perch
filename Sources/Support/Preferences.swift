@@ -26,6 +26,17 @@ extension Defaults.Keys {
     /// Bundle IDs whose notifications are never mirrored into the notch.
     static let mutedNotificationApps = Key<[String]>("mutedNotificationApps", default: [])
 
+    /// Opt-in: while mirroring is active, turn on a macOS Focus so the notch
+    /// *replaces* native banners instead of duplicating them. Driven by user
+    /// Shortcuts (the only supported way to toggle Focus on macOS 15).
+    static let dndPairingEnabled = Key<Bool>("dndPairingEnabled", default: false)
+
+    /// Name of the Shortcut that turns the paired Focus ON.
+    static let focusOnShortcutName = Key<String>("focusOnShortcutName", default: "")
+
+    /// Name of the Shortcut that turns the paired Focus OFF.
+    static let focusOffShortcutName = Key<String>("focusOffShortcutName", default: "")
+
     // MARK: Clipboard history
 
     /// Max number of unpinned clips to keep.

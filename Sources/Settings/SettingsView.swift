@@ -168,6 +168,11 @@ private struct ClipboardPane: View {
 private struct NotificationsPane: View {
     @Default(.notificationMirroringEnabled) private var notificationMirroringEnabled
     @Default(.mutedNotificationApps) private var mutedNotificationApps
+    @Default(.dndPairingEnabled) private var dndPairingEnabled
+    @Default(.focusOnShortcutName) private var focusOnShortcutName
+    @Default(.focusOffShortcutName) private var focusOffShortcutName
+
+    @State private var shortcuts: [String] = []
 
     var body: some View {
         Form {
@@ -177,6 +182,28 @@ private struct NotificationsPane: View {
                 Text("Shows delivered macOS notifications in the collapsed notch. Requires Full Disk Access — you'll be prompted to grant it when first enabled.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if notificationMirroringEnabled {
+                Section {
+                    Toggle("Replace system banners with a Focus", isOn: $dndPairingEnabled)
+                    if dndPairingEnabled {
+                        shortcutPicker("Turn Focus on", selection: $focusOnShortcutName)
+                        shortcutPicker("Turn Focus off", selection: $focusOffShortcutName)
+                        HStack {
+                            Button("New Focus Shortcut…", action: openShortcuts)
+                            Spacer()
+                            Button("Refresh", action: loadShortcuts)
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                } header: {
+                    Text("Do Not Disturb Pairing")
+                } footer: {
+                    Text("macOS has no public way to toggle Focus, so Mybar runs Shortcuts you provide. Create two shortcuts — each a “Set Focus” action, one turning a Focus On and one Off — then pick them above. While mirroring is on, the Focus hides native banners; the notch still shows them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if notificationMirroringEnabled {
@@ -208,6 +235,7 @@ private struct NotificationsPane: View {
                 }
             }
         }
+        .onAppear(perform: loadShortcuts)
     }
 
     private func muteApp() {
@@ -219,6 +247,30 @@ private struct NotificationsPane: View {
         guard panel.runModal() == .OK, let url = panel.url,
               let id = Bundle(url: url)?.bundleIdentifier else { return }
         if !mutedNotificationApps.contains(id) { mutedNotificationApps.append(id) }
+    }
+
+    /// A picker over the user's shortcut library, plus a "None" option. Keeps a
+    /// previously-saved name selectable even if the library hasn't loaded yet.
+    private func shortcutPicker(_ label: String, selection: Binding<String>) -> some View {
+        let options = (["", selection.wrappedValue] + shortcuts)
+            .filter { $0 == "" || shortcuts.contains($0) || $0 == selection.wrappedValue }
+        var seen = Set<String>()
+        let unique = options.filter { seen.insert($0).inserted }
+        return Picker(label, selection: selection) {
+            ForEach(unique, id: \.self) { name in
+                Text(name.isEmpty ? "None" : name).tag(name)
+            }
+        }
+    }
+
+    private func loadShortcuts() {
+        shortcuts = FocusController.availableShortcuts()
+    }
+
+    private func openShortcuts() {
+        if let url = URL(string: "shortcuts://create-shortcut") {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
 
