@@ -7,15 +7,13 @@ signing. Users bypass Gatekeeper once on first launch.
 ## Cutting a release
 
 1. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`.
-2. Build and package:
+2. Commit and push, then tag:
    ```sh
-   ./scripts/release.sh
+   git tag v0.2.0
+   git push origin v0.2.0
    ```
-   The script:
-   - builds for `generic/platform=macOS` (arm64 + x86_64)
-   - creates `Perch.dmg`
-3. Upload the `.dmg` to a GitHub Release (draft on
-   https://github.com/Arunava-K/Perch/releases).
+3. The GitHub Action builds `Perch.dmg` and creates a draft release automatically.
+4. Publish the draft on https://github.com/Arunava-K/Perch/releases.
 
 ## User installation
 
