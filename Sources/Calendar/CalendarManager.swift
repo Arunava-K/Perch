@@ -78,12 +78,19 @@ final class CalendarManager: ObservableObject {
     private let service: CalendarServiceProviding
     private var refreshTimer: Timer?
     private var storeObserver: NSObjectProtocol?
+    private var applicationObserver: NSObjectProtocol?
     private var remindedEventIDs: Set<String> = []
+    private var accessRequestGeneration = 0
 
     init(service: CalendarServiceProviding = CalendarService()) {
         self.service = service
         self.access = service.access
         self.selectedDate = Calendar.current.startOfDay(for: Date())
+        applicationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshAccessAfterSettings() }
+        }
     }
 
     /// Switch the day shown in the agenda list (driven by the date strip).
@@ -144,11 +151,14 @@ final class CalendarManager: ObservableObject {
         access = service.access
         switch access {
         case .granted:
-            start()
+            if isActive { refresh() } else { start() }
         case .notDetermined:
+            accessRequestGeneration += 1
+            let generation = accessRequestGeneration
             Task { [weak self] in
                 guard let self else { return }
                 let granted = await self.service.requestAccess()
+                guard generation == self.accessRequestGeneration, Defaults[.calendarEnabled] else { return }
                 self.access = self.service.access
                 if granted { self.start() }
             }
@@ -176,6 +186,7 @@ final class CalendarManager: ObservableObject {
     }
 
     private func stop() {
+        accessRequestGeneration += 1
         isActive = false
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -194,6 +205,7 @@ final class CalendarManager: ObservableObject {
     deinit {
         refreshTimer?.invalidate()
         if let storeObserver { NotificationCenter.default.removeObserver(storeObserver) }
+        if let applicationObserver { NotificationCenter.default.removeObserver(applicationObserver) }
     }
 
     // MARK: Refresh
@@ -234,6 +246,12 @@ final class CalendarManager: ObservableObject {
 
     /// Re-run live-activity evaluation immediately (e.g. after a settings change).
     func reevaluate() { refresh() }
+
+    /// The user may grant access in System Settings while the app is inactive.
+    private func refreshAccessAfterSettings() {
+        guard Defaults[.calendarEnabled] else { return }
+        requestAccessAndStart()
+    }
 
     private var visibleCalendarIDs: Set<String> {
         Set(calendars.map(\.id)).subtracting(Defaults[.hiddenCalendarIDs])

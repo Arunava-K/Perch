@@ -82,17 +82,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mediaKeyTap.onKey = { [weak notchController] key in
             switch key {
             case .volumeUp, .volumeDown, .mute:
-                switch key {
-                case .volumeUp: VolumeController.adjust(by: 1.0 / 16)
-                case .volumeDown: VolumeController.adjust(by: -1.0 / 16)
-                case .mute: VolumeController.toggleMute()
-                default: break
+                // AppleScript volume I/O can stall; keep the event-tap path free.
+                Task.detached {
+                    switch key {
+                    case .volumeUp: VolumeController.adjust(by: 1.0 / 16)
+                    case .volumeDown: VolumeController.adjust(by: -1.0 / 16)
+                    case .mute: VolumeController.toggleMute()
+                    default: break
+                    }
+                    let muted = VolumeController.isMuted()
+                    let value = VolumeController.current()
+                    let symbol = (muted || value == 0) ? "speaker.slash.fill"
+                        : value < 0.5 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"
+                    await MainActor.run {
+                        notchController?.showHUD(symbol: symbol, value: muted ? 0 : value)
+                    }
                 }
-                let muted = VolumeController.isMuted()
-                let value = VolumeController.current()
-                let symbol = (muted || value == 0) ? "speaker.slash.fill"
-                    : value < 0.5 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"
-                notchController?.showHUD(symbol: symbol, value: muted ? 0 : value)
 
             case .brightnessUp, .brightnessDown:
                 let delta = (key == .brightnessUp ? 1.0 : -1.0) / 16

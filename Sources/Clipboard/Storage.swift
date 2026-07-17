@@ -24,14 +24,20 @@ final class BlobStore {
     }
 
     /// Returns the sidecar filename and the content hash (used for dedup keys).
-    func savePNG(_ data: Data) -> (file: String, hash: String) {
+    func savePNG(_ data: Data) -> (file: String, hash: String)? {
         let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         let file = "\(hash).png"
         let url = directory.appendingPathComponent(file)
-        if !FileManager.default.fileExists(atPath: url.path) {
-            try? data.write(to: url, options: .atomic)
+        if FileManager.default.fileExists(atPath: url.path) {
+            return (file, hash)
         }
-        return (file, hash)
+        do {
+            try data.write(to: url, options: .atomic)
+            return (file, hash)
+        } catch {
+            NSLog("Mybar: could not save image blob: \(error)")
+            return nil
+        }
     }
 
     func url(for file: String) -> URL { directory.appendingPathComponent(file) }
@@ -66,6 +72,26 @@ final class ClipPersistence {
 
         // Fallback: salvage whatever decodes, skip corrupt entries.
         guard let array = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return [] }
+        var valid: [ClipItem] = []
+        for element in array {
+            if let itemData = try? JSONSerialization.data(withJSONObject: element),
+               let item = try? decoder.decode(ClipItem.self, from: itemData) {
+                valid.append(item)
+            }
+        }
+        return valid
+    }
+
+    /// Loads a legacy file for the one-time SQLite import, preserving read and
+    /// parse failures so the import marker is not written prematurely.
+    func loadForMigration() throws -> [ClipItem] {
+        let data = try Data(contentsOf: fileURL)
+        if let items = try? decoder.decode([ClipItem].self, from: data) { return items }
+
+        let array = try JSONSerialization.jsonObject(with: data) as? [Any]
+        guard let array else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
         var valid: [ClipItem] = []
         for element in array {
             if let itemData = try? JSONSerialization.data(withJSONObject: element),

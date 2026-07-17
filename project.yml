@@ -8,16 +8,16 @@ options:
 packages:
   Defaults:
     url: https://github.com/sindresorhus/Defaults
-    from: "9.0.0"
+    exactVersion: "9.0.8"
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: "2.2.0"
+    exactVersion: "2.4.0"
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    from: "2.6.0"
+    exactVersion: "2.9.3"
   GRDB:
     url: https://github.com/groue/GRDB.swift
-    from: "6.0.0"
+    exactVersion: "6.29.3"
 
 settings:
   base:
@@ -33,11 +33,15 @@ settings:
     CODE_SIGN_IDENTITY: "Mybar Dev"
     DEVELOPMENT_TEAM: ""
     PROVISIONING_PROFILE_SPECIFIER: ""
-    # Off for local dev: hardened runtime's library validation rejects the
-    # Debug dylib when signed by a self-signed cert (no Team ID). Re-enable for
-    # a notarized Developer ID release.
-    ENABLE_HARDENED_RUNTIME: NO
     DEAD_CODE_STRIPPING: YES
+  configs:
+    # Off for local dev: hardened runtime's library validation rejects the
+    # Debug dylib when signed by a self-signed cert (no Team ID).
+    Debug:
+      ENABLE_HARDENED_RUNTIME: NO
+    # On for Release / notarized Developer ID builds.
+    Release:
+      ENABLE_HARDENED_RUNTIME: YES
 
 targets:
   Mybar:

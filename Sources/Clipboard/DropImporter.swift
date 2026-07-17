@@ -36,7 +36,7 @@ enum DropImporter {
         if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
            let data = await loadData(provider, type: UTType.image.identifier),
            let image = NSImage(data: data), let png = image.pngData() {
-            let saved = BlobStore.shared.savePNG(png)
+            guard let saved = BlobStore.shared.savePNG(png) else { return nil }
             let size = image.pixelSize
             return ClipItem(kind: .image(blobFile: saved.file, contentHash: saved.hash,
                                          pixelWidth: Int(size.width), pixelHeight: Int(size.height)))

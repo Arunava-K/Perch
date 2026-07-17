@@ -55,11 +55,12 @@ extension ClipRecord {
         self.richRTF = item.richRTF
     }
 
-    /// Reconstruct the domain item; returns nil if the payload can't decode.
+    /// Reconstruct the domain item; returns nil if the id or payload can't decode.
     func toItem() -> ClipItem? {
-        guard let kindValue = try? ClipRecord.decoder.decode(ClipKind.self, from: kind) else { return nil }
+        guard let uuid = UUID(uuidString: id),
+              let kindValue = try? ClipRecord.decoder.decode(ClipKind.self, from: kind) else { return nil }
         return ClipItem(
-            id: UUID(uuidString: id) ?? UUID(),
+            id: uuid,
             kind: kindValue,
             timestamp: Date(timeIntervalSince1970: timestamp),
             sourceAppName: sourceAppName,

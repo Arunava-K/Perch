@@ -8,11 +8,12 @@ import GRDB
 /// lock flag, an `embedding` BLOB for on-device semantic search, and an
 /// FTS5 virtual table for full-text search.
 final class AppDatabase {
-    static let shared: AppDatabase = {
+    static let shared: AppDatabase? = {
         do {
             return try AppDatabase()
         } catch {
-            fatalError("Mybar could not open its database: \(error)")
+            NSLog("Mybar: database unavailable; clipboard persistence is disabled: \(error)")
+            return nil
         }
     }()
 

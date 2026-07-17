@@ -18,18 +18,26 @@ final class CameraManager: ObservableObject {
 
     private let sessionQueue = DispatchQueue(label: "com.steinerco.mybar.camera")
     private var configured = false
+    private var wantsRunning = false
+    private var requestingAccess = false
 
     /// Request access if needed, then start. Called when the mirror appears.
     func requestAndStart() {
+        sessionQueue.async { [weak self] in self?.wantsRunning = true }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             setAuthorization(.authorized)
             start()
         case .notDetermined:
+            guard !requestingAccess else { return }
+            requestingAccess = true
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 guard let self else { return }
-                self.setAuthorization(AVCaptureDevice.authorizationStatus(for: .video))
-                if granted { self.start() }
+                DispatchQueue.main.async {
+                    self.requestingAccess = false
+                    self.setAuthorization(AVCaptureDevice.authorizationStatus(for: .video))
+                    if granted { self.start() }
+                }
             }
         default:
             setAuthorization(AVCaptureDevice.authorizationStatus(for: .video))
@@ -46,6 +54,7 @@ final class CameraManager: ObservableObject {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
         sessionQueue.async { [weak self] in
             guard let self else { return }
+            guard self.wantsRunning else { return }
             self.configureIfNeeded()
             if !self.session.isRunning { self.session.startRunning() }
             self.setRunning(true)
@@ -54,8 +63,9 @@ final class CameraManager: ObservableObject {
 
     func stop() {
         sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            self.session.stopRunning()
+            guard let self else { return }
+            self.wantsRunning = false
+            if self.session.isRunning { self.session.stopRunning() }
             self.setRunning(false)
         }
     }

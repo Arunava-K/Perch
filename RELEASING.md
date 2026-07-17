@@ -22,26 +22,40 @@ hold — they can't be performed in CI without your secrets.
 
 ### 2. Sparkle signing keys
 Sparkle signs updates with an EdDSA key so clients can verify them.
-- Get Sparkle's tools (e.g. download a Sparkle release, or
-  `swift run --package-path .build/checkouts/Sparkle generate_keys`).
-- Run `./bin/generate_keys` once. It stores the **private** key in your keychain
-  and prints the **public** key.
-- Put the public key in `project.yml` under the target's `info.properties`:
-  ```yaml
-  SUPublicEDKey: "<base64 public key>"
-  SUFeedURL: "https://your.site/mybar/appcast.xml"
-  SUEnableAutomaticChecks: true
-  ```
-- Re-run `xcodegen generate`.
+
+1. Download a Sparkle release and copy its tools into `./bin`:
+   ```sh
+   mkdir -p bin
+   # From the Sparkle distribution:
+   cp /path/to/Sparkle-*/bin/generate_keys bin/
+   cp /path/to/Sparkle-*/bin/sign_update bin/
+   chmod +x bin/generate_keys bin/sign_update
+   ```
+2. Run `./bin/generate_keys` once. It stores the **private** key in your keychain
+   and prints the **public** key.
+3. Put the public key in `project.yml` under the target's `info.properties`:
+   ```yaml
+   SUPublicEDKey: "<base64 public key>"
+   SUFeedURL: "https://your.site/mybar/appcast.xml"
+   SUEnableAutomaticChecks: true
+   ```
+4. Re-run `xcodegen generate`.
+
+Until `SUPublicEDKey` is set, the in-app updater stays dormant and "Check for
+Updates…" explains that updates are not configured.
 
 ## Cutting a release
 
 1. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`.
-2. Build, sign, notarize, and package:
+2. Build a **universal** signed, notarized package:
    ```sh
    DEV_ID="Developer ID Application: Your Name (TEAMID)" ./scripts/release.sh
    ```
-   This produces a notarized, stapled `Mybar.zip`.
+   The script:
+   - fails if the Sparkle feed/key are still placeholders (override with
+     `ALLOW_UNCONFIGURED_SPARKLE=1` only for non-update test packages)
+   - builds for `generic/platform=macOS` (arm64 + x86_64)
+   - enables hardened runtime, notarizes, staples, and runs `spctl --assess`
 3. Sign the zip for Sparkle and grab the EdDSA signature + length:
    ```sh
    ./bin/sign_update Mybar.zip
@@ -53,12 +67,10 @@ Sparkle signs updates with an EdDSA key so clients can verify them.
    **Check for Updates…** in the menu/Settings).
 
 ## Notes
-- Distribution decision: **non-sandboxed direct download** (see `ROADMAP.md`
-  Open Decisions) — required because clipboard polling, Accessibility paste-back,
-  and security-scoped bookmarks are heavily restricted under the App Store
-  sandbox.
-- Hardened runtime is already enabled (`ENABLE_HARDENED_RUNTIME`). Notarization
-  requires it.
-- The app currently has placeholder `SUFeedURL` and an empty `SUPublicEDKey`, so
-  **Check for Updates…** will report an error until the steps above are done.
-  Everything else (the updater wiring, menu items, UI) is in place.
+- Distribution decision: **non-sandboxed direct download** — required because
+  clipboard polling, Accessibility paste-back, and security-scoped bookmarks are
+  heavily restricted under the App Store sandbox.
+- Local Debug builds keep hardened runtime **off** (self-signed "Mybar Dev"
+  identity). Release builds and `scripts/release.sh` enable it for notarization.
+- Package versions are pinned with `exactVersion` in `project.yml` so release
+  builds do not silently pick newer SPM tags.

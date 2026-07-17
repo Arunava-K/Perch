@@ -198,13 +198,15 @@ final class ClipStore: ObservableObject {
     }
 
     private func storeEmbedding(_ vector: [Float], for id: UUID) {
+        // Clip may have been locked while the embedding was computing.
+        guard let item = items.first(where: { $0.id == id }), !item.isLocked else { return }
+        guard repo.setEmbedding(EmbeddingService.data(from: vector), id: id) else { return }
         embeddingCache[id] = vector
-        repo.setEmbedding(EmbeddingService.data(from: vector), id: id)
     }
 
     private func dropEmbedding(for id: UUID) {
         embeddingCache[id] = nil
-        repo.setEmbedding(nil, id: id)
+        _ = repo.setEmbedding(nil, id: id)
     }
 
     func embedding(for id: UUID) -> [Float]? { embeddingCache[id] }
@@ -274,7 +276,7 @@ final class ClipStore: ObservableObject {
             let json = try JSONEncoder().encode(realKind)
             let sealed = try ClipCrypto.seal(json, reason: "Lock this clip in Mybar")
             let lockedKind = ClipKind.locked(type: realKind.typeName)
-            repo.applyLock(id: id, lockedKind: lockedKind, sealed: sealed)
+            guard repo.applyLock(id: id, lockedKind: lockedKind, sealed: sealed) else { return }
             items[idx].kind = lockedKind
             items[idx].isLocked = true
             revealedIDs.remove(id)
@@ -308,7 +310,7 @@ final class ClipStore: ObservableObject {
         if !revealedIDs.contains(id), !reveal(id) { return }
         let realKind = items[idx].kind  // now decrypted in memory
         let searchText = items[idx].searchText
-        repo.removeLock(id: id, kind: realKind, searchText: searchText)
+        guard repo.removeLock(id: id, kind: realKind, searchText: searchText) else { return }
         items[idx].isLocked = false
         revealedIDs.remove(id)
         triggerEmbedding(for: id)

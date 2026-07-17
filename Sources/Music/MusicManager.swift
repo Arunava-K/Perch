@@ -17,7 +17,7 @@ final class MusicManager: ObservableObject {
     @Published private(set) var elapsed: Double = 0
     @Published private(set) var duration: Double = 0
 
-    enum Player: String {
+    enum Player: String, Sendable {
         case music = "Music"
         case spotify = "Spotify"
         var bundleID: String { self == .music ? "com.apple.Music" : "com.spotify.client" }
@@ -27,6 +27,7 @@ final class MusicManager: ObservableObject {
     private var tickTimer: Timer?
     private var artworkURLString: String?
     private var mockMode = false
+    private var refreshGeneration = 0
 
     /// Inject a fake now-playing state for UI verification (no real player).
     func injectMock() {
@@ -81,25 +82,35 @@ final class MusicManager: ObservableObject {
 
     private func control(_ command: String) {
         guard let app = activeApp else { return }
-        _ = runScript("tell application \"\(app.rawValue)\" to \(command)")
-        refresh()
+        Task { [weak self] in
+            _ = await Task.detached {
+                Self.runScript("tell application \"\(app.rawValue)\" to \(command)")
+            }.value
+            self?.refresh()
+        }
     }
 
     // MARK: Polling
 
     func refresh() {
         guard !mockMode else { return }
-        // Prefer whichever player is actually playing; fall back to any running one.
-        if let state = query(.spotify), state.isPlaying { apply(state, .spotify); return }
-        if let state = query(.music), state.isPlaying { apply(state, .music); return }
-        if let state = query(.spotify) { apply(state, .spotify); return }
-        if let state = query(.music) { apply(state, .music); return }
-        hasActivePlayer = false
-        isPlaying = false
-        activeApp = nil
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        // Apple events can stall while a player is busy, so never run them on UI actor.
+        Task { [weak self] in
+            let result = await Task.detached { Self.queryActivePlayer() }.value
+            guard let self, !self.mockMode, generation == self.refreshGeneration else { return }
+            if let (state, player) = result {
+                self.apply(state, player)
+            } else {
+                self.hasActivePlayer = false
+                self.isPlaying = false
+                self.activeApp = nil
+            }
+        }
     }
 
-    private struct State {
+    private struct State: Sendable {
         var isPlaying: Bool
         var title: String
         var artist: String
@@ -108,7 +119,16 @@ final class MusicManager: ObservableObject {
         var duration: Double
     }
 
-    private func query(_ player: Player) -> State? {
+    nonisolated private static func queryActivePlayer() -> (State, Player)? {
+        // Prefer whichever player is actually playing; fall back to any running one.
+        if let state = query(.spotify), state.isPlaying { return (state, .spotify) }
+        if let state = query(.music), state.isPlaying { return (state, .music) }
+        if let state = query(.spotify) { return (state, .spotify) }
+        if let state = query(.music) { return (state, .music) }
+        return nil
+    }
+
+    nonisolated private static func query(_ player: Player) -> State? {
         guard isRunning(player.bundleID) else { return nil }
         // Spotify exposes an artwork URL and ms durations; Music doesn't.
         let artworkExpr = player == .spotify ? "(artwork url of current track)" : "\"\""
@@ -168,11 +188,11 @@ final class MusicManager: ObservableObject {
 
     // MARK: Helpers
 
-    private func isRunning(_ bundleID: String) -> Bool {
+    nonisolated private static func isRunning(_ bundleID: String) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
 
-    private func runScript(_ source: String) -> String? {
+    nonisolated private static func runScript(_ source: String) -> String? {
         var error: NSDictionary?
         guard let script = NSAppleScript(source: source) else { return nil }
         let result = script.executeAndReturnError(&error)

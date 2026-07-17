@@ -52,6 +52,7 @@ final class NotchViewModel: ObservableObject {
     private let collapseDelay: Duration = .milliseconds(180)
     private var collapseTask: Task<Void, Never>?
     private var peekTask: Task<Void, Never>?
+    private var awaitingHoverExitAfterManualClose = false
 
     /// Lower damping gives a subtle overshoot so the notch visibly springs open
     /// — it reads as content bulging *out of* the hardware notch.
@@ -153,9 +154,10 @@ final class NotchViewModel: ObservableObject {
         if hovering {
             collapseTask?.cancel()
             collapseTask = nil
-            guard !isExpanded, Defaults[.openNotchOnHover] else { return }
+            guard !awaitingHoverExitAfterManualClose, !isExpanded, Defaults[.openNotchOnHover] else { return }
             expand()
         } else {
+            awaitingHoverExitAfterManualClose = false
             // Pinned-open notches ignore the cursor leaving.
             guard !isPinnedOpen else { return }
             scheduleCollapse()
@@ -173,6 +175,7 @@ final class NotchViewModel: ObservableObject {
     func toggleManually() {
         if isPinnedOpen || isExpanded {
             isPinnedOpen = false
+            awaitingHoverExitAfterManualClose = true
             collapse()
         } else {
             isPinnedOpen = true

@@ -1,80 +1,75 @@
 import Foundation
 import GRDB
 
-/// All clip persistence goes through here. Methods are resilient (errors are
-/// logged, not thrown) to match the previous JSON store's behavior, so callers
-/// stay simple.
+/// All clip persistence goes through here. Methods log failures rather than
+/// throwing, keeping clipboard capture available if the database is unavailable.
 final class ClipRepository {
     static let shared = ClipRepository()
 
-    private let dbQueue = AppDatabase.shared.dbQueue
+    private let dbQueue = AppDatabase.shared?.dbQueue
 
-    private init() {
-        migrateFromJSONIfNeeded()
+    private init() { migrateFromJSONIfNeeded() }
+
+    private func read<T>(_ operation: (Database) throws -> T) -> T? {
+        guard let dbQueue else {
+            NSLog("Mybar: database read skipped because the database is unavailable")
+            return nil
+        }
+        do { return try dbQueue.read(operation) }
+        catch {
+            NSLog("Mybar: database read failed: \(error)")
+            return nil
+        }
+    }
+
+    @discardableResult
+    private func write(_ operation: (Database) throws -> Void) -> Bool {
+        guard let dbQueue else {
+            NSLog("Mybar: database write skipped because the database is unavailable")
+            return false
+        }
+        do {
+            try dbQueue.write(operation)
+            return true
+        } catch {
+            NSLog("Mybar: database write failed: \(error)")
+            return false
+        }
     }
 
     // MARK: Loading
 
-    /// Active (non-trashed) items in a container, front-first.
     func load(_ container: ClipContainer) -> [ClipItem] {
-        records(sql: """
-            SELECT * FROM clip
-            WHERE container = ? AND isTrashed = 0
-            ORDER BY position DESC
-            """, arguments: [container.rawValue])
+        records(sql: "SELECT * FROM clip WHERE container = ? AND isTrashed = 0 ORDER BY position DESC", arguments: [container.rawValue])
     }
 
-    /// Trashed items, most-recently-trashed first.
     func loadTrashed() -> [ClipItem] {
-        records(sql: """
-            SELECT * FROM clip
-            WHERE isTrashed = 1
-            ORDER BY trashedAt DESC
-            """, arguments: [])
+        records(sql: "SELECT * FROM clip WHERE isTrashed = 1 ORDER BY trashedAt DESC", arguments: [])
     }
 
     private func records(sql: String, arguments: StatementArguments) -> [ClipItem] {
-        (try? dbQueue.read { db in
-            try ClipRecord.fetchAll(db, sql: sql, arguments: arguments)
-        })?.compactMap { $0.toItem() } ?? []
+        read { try ClipRecord.fetchAll($0, sql: sql, arguments: arguments) }?.compactMap { $0.toItem() } ?? []
     }
 
     // MARK: Full-text search
 
-    /// Keyword search over active history via the FTS5 index, best matches first.
-    /// Thread-safe (GRDB serializes), so callers can run it off the main thread.
     func search(_ query: String, limit: Int = 60) -> [ClipItem] {
         guard let match = Self.ftsQuery(from: query) else { return [] }
-        return records(sql: """
-            SELECT clip.* FROM clip
-            JOIN clip_fts ON clip_fts.rowid = clip.rowid
-            WHERE clip_fts MATCH ? AND clip.container = 'history' AND clip.isTrashed = 0
-            ORDER BY clip_fts.rank, clip.position DESC
-            LIMIT ?
-            """, arguments: [match, limit])
+        return records(sql: "SELECT clip.* FROM clip JOIN clip_fts ON clip_fts.rowid = clip.rowid WHERE clip_fts MATCH ? AND clip.container = 'history' AND clip.isTrashed = 0 ORDER BY clip_fts.rank, clip.position DESC LIMIT ?", arguments: [match, limit])
     }
 
-    /// Turn raw user text into a safe FTS5 prefix query: alphanumeric tokens,
-    /// each prefix-matched and AND-ed (e.g. "git clo" → "git* clo*"). Dropping
-    /// punctuation avoids FTS syntax errors from arbitrary input.
     private static func ftsQuery(from text: String) -> String? {
-        let tokens = text
-            .lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
+        let tokens = text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
         guard !tokens.isEmpty else { return nil }
         return tokens.map { "\($0)*" }.joined(separator: " ")
     }
 
     // MARK: Writing
 
-    /// Insert a new item (or move an existing one to the front), updating its
-    /// mutable fields. Used for both fresh captures and re-copies.
     func upsertFront(_ item: ClipItem, container: ClipContainer) {
-        try? dbQueue.write { db in
+        write { db in
             let next = try nextPosition(db, container: container)
             var record = ClipRecord(item: item, container: container, position: next)
-            // Preserve existing lock/pin/embedding state on a re-copy.
             if let existing = try ClipRecord.fetchOne(db, key: item.id.uuidString) {
                 record.isPinned = item.isPinned || existing.isPinned
                 record.isLocked = existing.isLocked
@@ -85,9 +80,7 @@ final class ClipRepository {
         }
     }
 
-    func setPinned(_ pinned: Bool, id: UUID) {
-        update(id: id) { $0.isPinned = pinned }
-    }
+    func setPinned(_ pinned: Bool, id: UUID) { update(id: id) { $0.isPinned = pinned } }
 
     func setOCR(_ text: String, id: UUID) {
         update(id: id) { record in
@@ -101,7 +94,7 @@ final class ClipRepository {
     }
 
     private func update(id: UUID, _ mutate: @escaping (inout ClipRecord) -> Void) {
-        try? dbQueue.write { db in
+        write { db in
             guard var record = try ClipRecord.fetchOne(db, key: id.uuidString) else { return }
             mutate(&record)
             try record.update(db)
@@ -110,42 +103,22 @@ final class ClipRepository {
 
     // MARK: Deleting
 
-    /// Permanent removal (used for automatic eviction).
-    func deletePermanently(_ id: UUID) {
-        _ = try? dbQueue.write { db in
-            try ClipRecord.deleteOne(db, key: id.uuidString)
-        }
-    }
+    func deletePermanently(_ id: UUID) { write { try ClipRecord.deleteOne($0, key: id.uuidString) } }
 
-    /// Permanently remove every unpinned, non-trashed item in a container.
     func deleteUnpinned(in container: ClipContainer) {
-        _ = try? dbQueue.write { db in
-            try ClipRecord
-                .filter(sql: "container = ? AND isPinned = 0 AND isTrashed = 0", arguments: [container.rawValue])
-                .deleteAll(db)
-        }
+        write { try ClipRecord.filter(sql: "container = ? AND isPinned = 0 AND isTrashed = 0", arguments: [container.rawValue]).deleteAll($0) }
     }
 
-    /// Soft-delete into the trash (recoverable).
     func trash(_ id: UUID, at date: Date = Date()) {
-        update(id: id) { record in
-            record.isTrashed = true
-            record.trashedAt = date.timeIntervalSince1970
-        }
+        update(id: id) { $0.isTrashed = true; $0.trashedAt = date.timeIntervalSince1970 }
     }
 
-    /// Move unpinned, non-trashed items in a container into the trash.
     func trashUnpinned(in container: ClipContainer, at date: Date = Date()) {
-        _ = try? dbQueue.write { db in
-            try db.execute(sql: """
-                UPDATE clip SET isTrashed = 1, trashedAt = ?
-                WHERE container = ? AND isPinned = 0 AND isTrashed = 0
-                """, arguments: [date.timeIntervalSince1970, container.rawValue])
-        }
+        write { try $0.execute(sql: "UPDATE clip SET isTrashed = 1, trashedAt = ? WHERE container = ? AND isPinned = 0 AND isTrashed = 0", arguments: [date.timeIntervalSince1970, container.rawValue]) }
     }
 
     func restore(_ id: UUID) {
-        try? dbQueue.write { db in
+        write { db in
             guard var record = try ClipRecord.fetchOne(db, key: id.uuidString) else { return }
             record.isTrashed = false
             record.trashedAt = nil
@@ -154,45 +127,39 @@ final class ClipRepository {
         }
     }
 
-    /// Permanently delete everything currently in the trash.
-    func emptyTrash() {
-        _ = try? dbQueue.write { db in
-            try ClipRecord.filter(sql: "isTrashed = 1").deleteAll(db)
-        }
-    }
+    func emptyTrash() { write { try ClipRecord.filter(sql: "isTrashed = 1").deleteAll($0) } }
 
-    /// Permanently delete trashed items older than the given age.
     func purgeTrash(olderThan days: Int) {
         guard days > 0 else { return }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400).timeIntervalSince1970
-        _ = try? dbQueue.write { db in
-            try ClipRecord
-                .filter(sql: "isTrashed = 1 AND trashedAt IS NOT NULL AND trashedAt < ?", arguments: [cutoff])
-                .deleteAll(db)
-        }
+        write { try ClipRecord.filter(sql: "isTrashed = 1 AND trashedAt IS NOT NULL AND trashedAt < ?", arguments: [cutoff]).deleteAll($0) }
     }
 
-    // MARK: Vault (encrypted clips)
+    // MARK: Vault
 
-    /// Seal a clip: store the locked placeholder kind + ciphertext, and clear
-    /// its searchText so encrypted content never lands in the FTS index.
-    func applyLock(id: UUID, lockedKind: ClipKind, sealed: Data) {
-        let kindData = (try? JSONEncoder().encode(lockedKind)) ?? Data()
-        try? dbQueue.write { db in
+    func applyLock(id: UUID, lockedKind: ClipKind, sealed: Data) -> Bool {
+        guard let kindData = try? JSONEncoder().encode(lockedKind) else {
+            NSLog("Mybar: could not encode locked clip")
+            return false
+        }
+        return write { db in
             guard var record = try ClipRecord.fetchOne(db, key: id.uuidString) else { return }
             record.kind = kindData
             record.sealed = sealed
             record.isLocked = true
+            record.embedding = nil
             record.blobFile = ClipRecord.blobFile(for: lockedKind)
             record.searchText = ""
             try record.update(db)
         }
     }
 
-    /// Remove protection: restore the plaintext kind + searchText, drop ciphertext.
-    func removeLock(id: UUID, kind: ClipKind, searchText: String) {
-        let kindData = (try? JSONEncoder().encode(kind)) ?? Data()
-        try? dbQueue.write { db in
+    func removeLock(id: UUID, kind: ClipKind, searchText: String) -> Bool {
+        guard let kindData = try? JSONEncoder().encode(kind) else {
+            NSLog("Mybar: could not encode unlocked clip")
+            return false
+        }
+        return write { db in
             guard var record = try ClipRecord.fetchOne(db, key: id.uuidString) else { return }
             record.kind = kindData
             record.sealed = nil
@@ -204,54 +171,42 @@ final class ClipRepository {
     }
 
     func sealedPayload(id: UUID) -> Data? {
-        try? dbQueue.read { db in
-            try ClipRecord.fetchOne(db, key: id.uuidString)?.sealed
-        } ?? nil
+        read { try ClipRecord.fetchOne($0, key: id.uuidString)?.sealed } ?? nil
     }
 
-    // MARK: Embeddings (semantic search)
+    // MARK: Embeddings
 
-    func setEmbedding(_ data: Data?, id: UUID) {
-        _ = try? dbQueue.write { db in
-            try db.execute(sql: "UPDATE clip SET embedding = ? WHERE id = ?",
-                           arguments: [data, id.uuidString])
+    func setEmbedding(_ data: Data?, id: UUID) -> Bool {
+        write { db in
+            // The clip could have been locked while its embedding was computed.
+            guard var record = try ClipRecord.fetchOne(db, key: id.uuidString), !record.isLocked else { return }
+            record.embedding = data
+            try record.update(db)
         }
     }
 
-    /// (id, vector) pairs for active history clips that have an embedding.
     func allEmbeddings() -> [(id: UUID, vector: [Float])] {
-        let rows = (try? dbQueue.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT id, embedding FROM clip
-                WHERE container = 'history' AND isTrashed = 0 AND embedding IS NOT NULL
-                """)
-        }) ?? []
+        let rows = read { try Row.fetchAll($0, sql: "SELECT id, embedding FROM clip WHERE container = 'history' AND isTrashed = 0 AND embedding IS NOT NULL") } ?? []
         return rows.compactMap { row in
-            guard let idString: String = row["id"], let uuid = UUID(uuidString: idString),
-                  let data: Data = row["embedding"] else { return nil }
+            guard let idString: String = row["id"], let uuid = UUID(uuidString: idString), let data: Data = row["embedding"] else { return nil }
             return (uuid, EmbeddingService.vector(from: data))
         }
     }
 
     // MARK: Blob references
 
-    /// Is this image blob still referenced by any row (any container, incl. trash)?
     func isBlobReferenced(_ file: String) -> Bool {
-        let count = (try? dbQueue.read { db in
+        guard let result = read({ db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM clip WHERE blobFile = ?", arguments: [file])
-        }) ?? 0
-        return count > 0
+        }) else {
+            // Never delete a blob when its reference check cannot be trusted.
+            return true
+        }
+        return (result ?? 0) > 0
     }
 
-    // MARK: Helpers
-
     private func nextPosition(_ db: Database, container: ClipContainer) throws -> Double {
-        let maxPos = try Double.fetchOne(
-            db,
-            sql: "SELECT COALESCE(MAX(position), 0) FROM clip WHERE container = ?",
-            arguments: [container.rawValue]
-        ) ?? 0
-        return maxPos + 1
+        (try Double.fetchOne(db, sql: "SELECT COALESCE(MAX(position), 0) FROM clip WHERE container = ?", arguments: [container.rawValue]) ?? 0) + 1
     }
 
     // MARK: One-time JSON import
@@ -259,23 +214,35 @@ final class ClipRepository {
     private func migrateFromJSONIfNeeded() {
         let marker = AppPaths.root.appendingPathComponent(".migratedToSQLite")
         guard !FileManager.default.fileExists(atPath: marker.path) else { return }
-
-        importJSON(filename: "clips.json", container: .history)
-        importJSON(filename: "shelf.json", container: .shelf)
-
-        FileManager.default.createFile(atPath: marker.path, contents: nil)
+        do {
+            let history = try legacyItems(filename: "clips.json")
+            let shelf = try legacyItems(filename: "shelf.json")
+            if !history.isEmpty || !shelf.isEmpty {
+                guard let dbQueue else { throw CocoaError(.fileNoSuchFile) }
+                try dbQueue.write { db in
+                    try insertLegacy(history, into: .history, db: db)
+                    try insertLegacy(shelf, into: .shelf, db: db)
+                }
+            }
+            guard FileManager.default.createFile(atPath: marker.path, contents: nil) else {
+                NSLog("Mybar: could not write legacy migration marker")
+                return
+            }
+        } catch {
+            NSLog("Mybar: legacy JSON migration failed and will be retried: \(error)")
+        }
     }
 
-    private func importJSON(filename: String, container: ClipContainer) {
-        let items = ClipPersistence(filename: filename).load()
-        guard !items.isEmpty else { return }
-        // Preserve original order: index 0 (newest) gets the highest position.
-        try? dbQueue.write { db in
-            let count = items.count
-            for (index, item) in items.enumerated() {
-                let position = Double(count - index)
-                try ClipRecord(item: item, container: container, position: position).insert(db)
-            }
+    private func legacyItems(filename: String) throws -> [ClipItem] {
+        let url = AppPaths.root.appendingPathComponent(filename)
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        return try ClipPersistence(filename: filename).loadForMigration()
+    }
+
+    private func insertLegacy(_ items: [ClipItem], into container: ClipContainer, db: Database) throws {
+        let count = items.count
+        for (index, item) in items.enumerated() {
+            try ClipRecord(item: item, container: container, position: Double(count - index)).insert(db)
         }
     }
 }

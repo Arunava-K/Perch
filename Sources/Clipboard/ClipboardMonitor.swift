@@ -77,7 +77,7 @@ final class ClipboardMonitor {
         // 2. Image bitmap.
         if pb.canReadItem(withDataConformingToTypes: [UTType.png.identifier, UTType.tiff.identifier]),
            let image = NSImage(pasteboard: pb), let png = image.pngData() {
-            let saved = BlobStore.shared.savePNG(png)
+            guard let saved = BlobStore.shared.savePNG(png) else { return nil }
             let size = image.pixelSize
             return .image(blobFile: saved.file, contentHash: saved.hash,
                           pixelWidth: Int(size.width), pixelHeight: Int(size.height))

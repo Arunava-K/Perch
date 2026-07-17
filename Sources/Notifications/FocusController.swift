@@ -52,22 +52,25 @@ final class FocusPairingController {
     private var observations: [Defaults.Observation] = []
     private var active = false
 
-    /// Observe the two prefs and keep the Focus in sync. Fires immediately, so
-    /// it also re-asserts the correct state at launch.
+    /// Observe the pairing prefs and shortcut names; re-assert Focus when any
+    /// of them change. Fires immediately so launch also restores the right state.
     func activate() {
         observations = [
             Defaults.observe(.notificationMirroringEnabled) { [weak self] _ in self?.apply() },
             Defaults.observe(.dndPairingEnabled) { [weak self] _ in self?.apply() },
+            Defaults.observe(.focusOnShortcutName) { [weak self] _ in self?.apply(forceRefresh: true) },
+            Defaults.observe(.focusOffShortcutName) { [weak self] _ in self?.apply(forceRefresh: true) },
         ]
     }
 
-    private func apply() {
+    private func apply(forceRefresh: Bool = false) {
         let shouldBeOn = Defaults[.notificationMirroringEnabled] && Defaults[.dndPairingEnabled]
-        guard shouldBeOn != active else { return }
-        active = shouldBeOn
         if shouldBeOn {
+            guard !active || forceRefresh else { return }
+            active = true
             FocusController.runShortcut(named: Defaults[.focusOnShortcutName])
-        } else {
+        } else if active {
+            active = false
             FocusController.runShortcut(named: Defaults[.focusOffShortcutName])
         }
     }

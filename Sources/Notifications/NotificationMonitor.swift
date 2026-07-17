@@ -20,6 +20,8 @@ final class NotificationMonitor {
     private var askedForAccess = false
     private var observation: Defaults.Observation?
     private let ownBundleID = Bundle.main.bundleIdentifier
+    private var readTask: Task<Void, Never>?
+    private var generation = 0
 
     var isConnected: Bool { connected }
 
@@ -34,8 +36,10 @@ final class NotificationMonitor {
 
     /// Tear down polling/retry. Safe to call when not running.
     func stop() {
+        generation += 1
         pollTimer?.invalidate(); pollTimer = nil
         retryTimer?.invalidate(); retryTimer = nil
+        readTask?.cancel(); readTask = nil
         connected = false
         askedForAccess = false
     }
@@ -43,7 +47,7 @@ final class NotificationMonitor {
     /// A fresh read-only connection. We deliberately open one per read: a single
     /// long-lived read-only connection to the system's live WAL database gets
     /// stuck on a stale snapshot and stops seeing new notifications.
-    private func makeConnection() -> DatabaseQueue? {
+    nonisolated private static func makeConnection() -> DatabaseQueue? {
         guard let path = Self.dbPath else { return nil }
         var config = Configuration()
         config.readonly = true
@@ -51,7 +55,7 @@ final class NotificationMonitor {
     }
 
     /// Candidate DB locations across macOS versions.
-    private static var dbPath: String? {
+    nonisolated private static var dbPath: String? {
         let base = NSHomeDirectory() + "/Library/Group Containers/group.com.apple.usernoted"
         for sub in ["db2/db", "db/db"] {
             let path = base + "/" + sub
@@ -62,30 +66,37 @@ final class NotificationMonitor {
 
     func start() {
         guard pollTimer == nil, retryTimer == nil else { return }  // already running
-        if openDatabase() {
-            beginPolling()
-        } else {
-            if !askedForAccess { askedForAccess = true; onNeedsFullDiskAccess?() }
-            scheduleRetry()
-        }
+        attemptConnection()
     }
 
     // MARK: Connection
 
     /// Probe connectivity (verifies Full Disk Access + schema) and seed lastRecID
     /// to the current max so we don't replay history.
-    @discardableResult
-    private func openDatabase() -> Bool {
-        guard let queue = makeConnection() else { return false }
-        do {
-            let maxID = try queue.read { db in
-                try Int64.fetchOne(db, sql: "SELECT COALESCE(MAX(rec_id), 0) FROM record") ?? 0
+    nonisolated private static func latestRecordID() -> Int64? {
+        guard let queue = Self.makeConnection() else { return nil }
+        return try? queue.read { db in
+            try Int64.fetchOne(db, sql: "SELECT COALESCE(MAX(rec_id), 0) FROM record") ?? 0
+        }
+    }
+
+    private func attemptConnection() {
+        guard readTask == nil else { return }
+        let generation = generation
+        readTask = Task { [weak self] in
+            let maxID = await Task.detached { Self.latestRecordID() }.value
+            guard let self, !Task.isCancelled, generation == self.generation else { return }
+            self.readTask = nil
+            if let maxID {
+                self.connected = true
+                self.lastRecID = maxID  // start fresh; don't replay history
+                self.retryTimer?.invalidate()
+                self.retryTimer = nil
+                self.beginPolling()
+            } else {
+                if !self.askedForAccess { self.askedForAccess = true; self.onNeedsFullDiskAccess?() }
+                self.scheduleRetry()
             }
-            connected = true
-            lastRecID = maxID  // start fresh; don't replay history
-            return true
-        } catch {
-            return false  // almost always missing Full Disk Access
         }
     }
 
@@ -94,11 +105,7 @@ final class NotificationMonitor {
         let timer = Timer(timeInterval: 3.0, repeats: true) { [weak self] t in
             MainActor.assumeIsolated {
                 guard let self else { t.invalidate(); return }
-                if self.openDatabase() {
-                    t.invalidate()
-                    self.retryTimer = nil
-                    self.beginPolling()
-                }
+                self.attemptConnection()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -116,38 +123,55 @@ final class NotificationMonitor {
     }
 
     private func poll() {
-        guard let queue = makeConnection() else { return }  // fresh snapshot each poll
+        guard readTask == nil else { return }
+        let lastRecID = lastRecID
+        let generation = generation
+        let muted = Set(Defaults[.mutedNotificationApps])
+        readTask = Task { [weak self] in
+            let result = await Task.detached { Self.readRecords(after: lastRecID) }.value
+            guard let self, !Task.isCancelled, generation == self.generation else { return }
+            self.readTask = nil
+            guard let result else { return }
+            if result.currentMax < self.lastRecID { self.lastRecID = result.currentMax }
+            for row in result.rows {
+                self.lastRecID = max(self.lastRecID, row.recID)
+                if let bundleID = row.bundleID, bundleID == self.ownBundleID || muted.contains(bundleID) { continue }
+                if let item = Self.parse(data: row.data, bundleID: row.bundleID) {
+                    self.onNotification?(item)
+                }
+            }
+        }
+    }
 
-        // If Notification Center cleared its table, rec_ids reset below our
-        // tracker — resync so we don't go blind to every new notification.
-        let currentMax = (try? queue.read { db in
-            try Int64.fetchOne(db, sql: "SELECT COALESCE(MAX(rec_id), 0) FROM record") ?? 0
-        }) ?? 0
-        if currentMax < lastRecID { lastRecID = currentMax }
+    private struct Record: Sendable {
+        let recID: Int64
+        let data: Data
+        let bundleID: String?
+    }
 
-        let rows = (try? queue.read { db in
-            try Row.fetchAll(db, sql: """
+    private struct ReadResult: Sendable {
+        let currentMax: Int64
+        let rows: [Record]
+    }
+
+    /// Reads use a fresh connection on a background task to avoid blocking UI.
+    nonisolated private static func readRecords(after lastRecID: Int64) -> ReadResult? {
+        guard let queue = Self.makeConnection() else { return nil }
+        return try? queue.read { db in
+            let currentMax = try Int64.fetchOne(db, sql: "SELECT COALESCE(MAX(rec_id), 0) FROM record") ?? 0
+            let rows = try Row.fetchAll(db, sql: """
                 SELECT record.rec_id AS rec_id, record.data AS data, app.identifier AS identifier
                 FROM record JOIN app ON record.app_id = app.app_id
                 WHERE record.rec_id > ?
                 ORDER BY record.rec_id ASC
                 """, arguments: [lastRecID])
-        }) ?? []
-
-        // Read the mute list once per poll; resolved at delivery time so edits
-        // in Settings take effect on the next notification.
-        let muted = Set(Defaults[.mutedNotificationApps])
-
-        for row in rows {
-            let recID: Int64 = row["rec_id"] ?? 0
-            lastRecID = max(lastRecID, recID)
-            let bundleID: String? = row["identifier"]
-            if let bundleID, bundleID == ownBundleID { continue }
-            if let bundleID, muted.contains(bundleID) { continue }
-            guard let data: Data = row["data"] else { continue }
-            if let item = Self.parse(data: data, bundleID: bundleID) {
-                onNotification?(item)
-            }
+            return ReadResult(
+                currentMax: currentMax,
+                rows: rows.compactMap { row in
+                    guard let data: Data = row["data"] else { return nil }
+                    return Record(recID: row["rec_id"] ?? 0, data: data, bundleID: row["identifier"])
+                }
+            )
         }
     }
 
