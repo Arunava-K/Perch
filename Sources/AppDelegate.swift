@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shelfStore: ShelfStore?
     private var timerEngine: TimerEngine?
     private var calendarManager: CalendarManager?
+    private var reminderManager: ReminderManager?
     private var cameraManager: CameraManager?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
@@ -51,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let calendarManager = CalendarManager()
         self.calendarManager = calendarManager
 
+        // Reminders: incomplete items grouped by urgency. Opt-in — only reads
+        // reminders once the user enables it in Settings.
+        let reminderManager = ReminderManager()
+        self.reminderManager = reminderManager
+
         // Webcam mirror (top-right corner of the notch). Camera runs only while
         // the mirror is visible.
         let cameraManager = CameraManager()
@@ -61,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ClipboardModule(store: clipStore),
             ShelfModule(shelf: shelfStore),
             TimerModule(timer: timerEngine),
-            CalendarModule(calendar: calendarManager),
+            CalendarModule(calendar: calendarManager, reminders: reminderManager),
             MusicModule(music: musicManager),
         ])
         self.moduleRegistry = registry
@@ -141,10 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let libraryController = LibraryWindowController(store: clipStore)
         self.libraryController = libraryController
 
-        // Start reading calendar events only if the user opted in previously.
+        // Start reading events / reminders only if the user opted in previously.
         calendarManager.startIfEnabled()
+        reminderManager.startIfEnabled()
 
-        let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager)
+        let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager, reminders: reminderManager)
         self.settingsController = settingsController
 
         // The notch's gear button opens Settings (also reachable when the menu

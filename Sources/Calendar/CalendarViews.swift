@@ -29,9 +29,10 @@ struct CollapsedCalendarView: View {
 }
 
 /// The Calendar tab: a month grid on the left (~70%) and the selected day's
-/// agenda on the right (~30%).
+/// agenda + reminders on the right (~30%).
 struct CalendarTab: View {
     @ObservedObject var calendar: CalendarManager
+    @ObservedObject var reminders: ReminderManager
     let dismiss: () -> Void
 
     @State private var selectedDate = Date()
@@ -40,7 +41,7 @@ struct CalendarTab: View {
 
     var body: some View {
         Group {
-            if calendar.access != .granted {
+            if calendar.access != .granted || reminders.access != .granted {
                 permissionView
             } else {
                 splitView
@@ -89,26 +90,59 @@ struct CalendarTab: View {
                 .foregroundStyle(.white.opacity(0.4))
                 .padding(.leading, 8)
 
-            if calendar.dayEvents.isEmpty {
-                EmptyEventsView(selectedDate: selectedDate)
+            if calendar.dayEvents.isEmpty && reminders.reminders.isEmpty {
+                emptyState
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(calendar.dayEvents.enumerated()), id: \.element.id) { idx, event in
-                            Button {
-                                calendar.openInCalendar(event)
-                                dismiss()
-                            } label: {
-                                agendaRow(event)
+                    VStack(alignment: .leading, spacing: 6) {
+                        if !calendar.dayEvents.isEmpty {
+                            sectionLabel("Events")
+                            ForEach(Array(calendar.dayEvents.enumerated()), id: \.element.id) { idx, event in
+                                Button {
+                                    calendar.openInCalendar(event)
+                                    dismiss()
+                                } label: {
+                                    agendaRow(event)
+                                }
+                                .buttonStyle(PressableStyle())
+                                .staggeredAppear(idx)
                             }
-                            .buttonStyle(PressableStyle())
-                            .staggeredAppear(idx)
+                        }
+
+                        if !reminders.reminders.isEmpty {
+                            if !calendar.dayEvents.isEmpty {
+                                Rectangle()
+                                    .fill(.white.opacity(0.06))
+                                    .frame(height: 1)
+                                    .padding(.vertical, 4)
+                            }
+                            sectionLabel("Reminders")
+                            ForEach(Array(reminders.reminders.enumerated()), id: \.element.id) { idx, item in
+                                Button {
+                                    reminders.openRemindersApp()
+                                    dismiss()
+                                } label: {
+                                    reminderRow(item)
+                                }
+                                .buttonStyle(PressableStyle())
+                                .staggeredAppear(calendar.dayEvents.count + idx)
+                            }
                         }
                     }
                 }
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .bold))
+            .tracking(0.8)
+            .textCase(.uppercase)
+            .foregroundStyle(.white.opacity(0.3))
+            .padding(.leading, 8)
+            .padding(.top, 2)
     }
 
     private func agendaRow(_ e: CalendarEvent) -> some View {
@@ -146,7 +180,52 @@ struct CalendarTab: View {
         .opacity(isPast ? 0.5 : 1)
     }
 
-    // MARK: Permission
+    private func reminderRow(_ item: ReminderItem) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .stroke(item.isOverdue ? Color.red : item.listColor, lineWidth: 2)
+                .frame(width: 10, height: 10)
+                .overlay(
+                    Circle()
+                        .fill(item.isOverdue ? Color.red : item.listColor)
+                        .frame(width: 5, height: 5)
+                )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if let date = item.dueDate {
+                        Text(dueDateLabel(date, overdue: item.isOverdue))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(item.isOverdue ? .red : .white.opacity(0.5))
+                    }
+                    Text("· \(item.listName)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .contentShape(Rectangle())
+    }
+
+    private func dueDateLabel(_ date: Date, overdue: Bool) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        if overdue { return "Overdue" }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
+    }
+
+    // MARK: Permission / Enable
 
     private var permissionView: some View {
         VStack(spacing: 10) {
@@ -156,21 +235,52 @@ struct CalendarTab: View {
             Text("Show your day in the notch")
                 .font(.system(size: 13.5, weight: .semibold))
                 .foregroundStyle(.white)
-            Button(calendar.access == .denied ? "Open System Settings" : "Enable Calendar") {
-                if calendar.access == .denied {
-                    calendar.openSystemSettings()
-                } else {
-                    calendar.setEnabled(true)
+
+            if calendar.access == .notDetermined || calendar.access == .denied {
+                Button(calendar.access == .denied ? "Open System Settings" : "Enable Calendar") {
+                    if calendar.access == .denied {
+                        calendar.openSystemSettings()
+                    } else {
+                        calendar.setEnabled(true)
+                    }
                 }
+                .buttonStyle(PressableStyle())
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(.white.opacity(0.16)))
             }
-            .buttonStyle(PressableStyle())
-            .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(.white.opacity(0.16)))
+
+            if reminders.access == .notDetermined || reminders.access == .denied {
+                Button(reminders.access == .denied ? "Open Settings for Reminders" : "Enable Reminders") {
+                    if reminders.access == .denied {
+                        reminders.openSystemSettings()
+                    } else {
+                        reminders.setEnabled(true)
+                    }
+                }
+                .buttonStyle(PressableStyle())
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(.white.opacity(0.16)))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 5) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 20))
+                .foregroundStyle(.white.opacity(0.4))
+            Text("All clear")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private func shortTime(_ date: Date) -> String {
@@ -178,24 +288,6 @@ struct CalendarTab: View {
         f.timeStyle = .short
         f.dateStyle = .none
         return f.string(from: date)
-    }
-}
-
-// MARK: - Empty state
-
-private struct EmptyEventsView: View {
-    let selectedDate: Date
-
-    var body: some View {
-        VStack(spacing: 5) {
-            Image(systemName: "calendar.badge.checkmark")
-                .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.4))
-            Text(Calendar.current.isDateInToday(selectedDate) ? "Nothing today" : "No events")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
 
@@ -258,17 +350,20 @@ private struct MonthGrid: View {
 
     private func dayCell(_ day: Date) -> some View {
         let inMonth = cal.isDate(day, equalTo: selectedDate, toGranularity: .month)
+        guard inMonth else {
+            return AnyView(Color.clear.frame(maxWidth: .infinity))
+        }
         let isToday = cal.isDateInToday(day)
         let isSelected = cal.isDate(day, inSameDayAs: selectedDate)
-        let marked = inMonth && hasEvents(day)
-        return Button {
+        let marked = hasEvents(day)
+        return AnyView(Button {
             selectedDate = day
             if Defaults[.hapticFeedback] { Haptics.tap() }
         } label: {
             VStack(spacing: 2) {
                 Text("\(cal.component(.day, from: day))")
                     .font(.system(size: 12, weight: isToday ? .bold : .medium))
-                    .foregroundStyle(dayColor(inMonth: inMonth, isToday: isToday, isSelected: isSelected))
+                    .foregroundStyle(isToday || isSelected ? .white : .white.opacity(0.85))
                     .frame(width: 23, height: 23)
                     .background(
                         Circle().fill(isToday ? Color.accentColor
@@ -281,12 +376,7 @@ private struct MonthGrid: View {
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-    }
-
-    private func dayColor(inMonth: Bool, isToday: Bool, isSelected: Bool) -> Color {
-        if isToday || isSelected { return .white }
-        return inMonth ? .white.opacity(0.85) : .white.opacity(0.25)
+        .buttonStyle(.plain))
     }
 
     // MARK: Date math

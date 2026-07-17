@@ -8,16 +8,18 @@ import SwiftUI
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let registry: ModuleRegistry
     private let calendar: CalendarManager
+    private let reminders: ReminderManager
     private var window: NSWindow?
 
-    init(registry: ModuleRegistry, calendar: CalendarManager) {
+    init(registry: ModuleRegistry, calendar: CalendarManager, reminders: ReminderManager) {
         self.registry = registry
         self.calendar = calendar
+        self.reminders = reminders
     }
 
     func show() {
         if window == nil {
-            let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar))
+            let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar, reminders: reminders))
             let window = NSWindow(contentViewController: hosting)
             window.title = "Perch Settings"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

@@ -74,6 +74,14 @@ extension Defaults.Keys {
     /// Off by default — a one-time reminder peek fires regardless.
     static let calendarShowCountdown = Key<Bool>("calendarShowCountdown", default: false)
 
+    // MARK: Reminders
+
+    /// Opt-in: read reminders and show the reminders tab + collapsed count.
+    static let remindersEnabled = Key<Bool>("remindersEnabled", default: false)
+
+    /// Reminder-list ids the user has hidden from the notch (empty = show all).
+    static let hiddenReminderListIDs = Key<[String]>("hiddenReminderListIDs", default: [])
+
     // MARK: Modules / tabs
 
     /// Module ids in display order (empty = registration order).

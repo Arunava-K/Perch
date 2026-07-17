@@ -100,6 +100,7 @@ final class NotchWindowController {
         calendar.onReminder = { [weak self] event in
             self?.model.showMessage(symbol: "calendar", text: "\(event.title) · \(event.relativeString())")
         }
+
     }
 
     // MARK: Hover via cursor polling

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Calendar / Up Next tab. The next meeting also surfaces as a live activity in
-/// the collapsed notch (wired in the window controller, like the timer).
+/// Calendar / Up Next tab with Reminders merged in. The next meeting also
+/// surfaces as a live activity in the collapsed notch.
 @MainActor
 final class CalendarModule: NotchModule {
     let id = "calendar"
@@ -9,16 +9,20 @@ final class CalendarModule: NotchModule {
     let icon = "calendar"
 
     let calendar: CalendarManager
+    let reminders: ReminderManager
 
-    init(calendar: CalendarManager) { self.calendar = calendar }
+    init(calendar: CalendarManager, reminders: ReminderManager) {
+        self.calendar = calendar
+        self.reminders = reminders
+    }
 
-    /// A live dot on the tab while the next event is imminent.
-    var indicator: Bool { calendar.isImminent }
+    /// A live dot on the tab while the next event is imminent, or active reminders.
+    var indicator: Bool { calendar.isImminent || reminders.hasActiveItems }
 
     /// Taller than other tabs so the month grid + agenda fit comfortably.
     var preferredExpandedHeight: CGFloat { 260 }
 
     func makeContent(_ context: ModuleContext) -> AnyView {
-        AnyView(CalendarTab(calendar: calendar, dismiss: context.dismiss))
+        AnyView(CalendarTab(calendar: calendar, reminders: reminders, dismiss: context.dismiss))
     }
 }

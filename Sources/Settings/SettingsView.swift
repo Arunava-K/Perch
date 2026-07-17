@@ -9,6 +9,7 @@ import KeyboardShortcuts
 struct SettingsView: View {
     @ObservedObject var registry: ModuleRegistry
     @ObservedObject var calendar: CalendarManager
+    @ObservedObject var reminders: ReminderManager
 
     var body: some View {
         TabView {
@@ -22,7 +23,7 @@ struct SettingsView: View {
                 NotificationsPane()
             }
             Tab("Calendar", systemImage: "calendar") {
-                CalendarPane(calendar: calendar)
+                CalendarPane(calendar: calendar, reminders: reminders)
             }
             Tab("Tabs", systemImage: "square.grid.2x2") {
                 TabsPane(registry: registry)
@@ -278,9 +279,11 @@ private struct NotificationsPane: View {
 
 private struct CalendarPane: View {
     @ObservedObject var calendar: CalendarManager
+    @ObservedObject var reminders: ReminderManager
 
     @Default(.calendarEnabled) private var calendarEnabled
     @Default(.calendarShowCountdown) private var calendarShowCountdown
+    @Default(.remindersEnabled) private var remindersEnabled
 
     var body: some View {
         Form {
@@ -315,8 +318,45 @@ private struct CalendarPane: View {
                         }
                     }
                 }
+            } header: {
+                Text("Events")
             } footer: {
                 Text("Shows today's agenda in a tab and counts down to your next meeting in the collapsed notch, with one-click Join for video calls. Requires Calendar access.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Show reminders in the notch", isOn: $remindersEnabled)
+                    .onChange(of: remindersEnabled) { _, on in
+                        reminders.setEnabled(on)
+                    }
+                if remindersEnabled, reminders.access == .denied {
+                    HStack {
+                        Label("Reminders access denied", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Open Settings…") { reminders.openSystemSettings() }
+                    }
+                }
+                if remindersEnabled, reminders.access == .granted, !reminders.calendars.isEmpty {
+                    ForEach(reminders.calendars) { list in
+                        HStack(spacing: 10) {
+                            Circle().fill(list.color).frame(width: 9, height: 9)
+                            Text(list.title)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { !reminders.isListHidden(list.id) },
+                                set: { reminders.setList(list.id, hidden: !$0) }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+            } header: {
+                Text("Reminders")
+            } footer: {
+                Text("Incomplete reminders appear below events in the Calendar tab. Requires Reminders access.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -26,6 +26,7 @@ final class NotchViewModel: ObservableObject {
     @Published var isTimerActive = false
     /// True while the next event is imminent — the collapsed notch counts down to it.
     @Published var isCalendarActive = false
+    /// True while there are overdue or today-due reminders.
     @Published var metrics: NotchMetrics
     /// Expanded height of the currently-selected tab (modules can differ).
     @Published var expandedHeight: CGFloat = 180
