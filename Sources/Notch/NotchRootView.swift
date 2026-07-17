@@ -17,6 +17,8 @@ struct NotchRootView: View {
     @ObservedObject var camera: CameraManager
     /// Weather badge in the top-right ear.
     @ObservedObject var weather: WeatherManager
+    /// System monitor (for the ear badge).
+    @ObservedObject var systemMonitor: SystemMonitorManager
     /// Opens the Settings window (gear button in the top-right ear).
     let onOpenSettings: () -> Void
 
@@ -129,6 +131,7 @@ struct NotchRootView: View {
                     Spacer(minLength: 0)
                     WeatherBadge(weather: weather)
                     webcamButton
+                    SystemLoadBadge(monitor: systemMonitor, registry: registry)
                     settingsButton
                 }
                 .frame(height: 26)

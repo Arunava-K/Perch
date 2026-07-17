@@ -37,7 +37,7 @@ struct NotchTabBar: View {
                         .fixedSize()
                 }
                 if module.indicator {
-                    Circle().fill(.green).frame(width: 5, height: 5)
+                    Circle().fill(module.indicatorColor ?? .green).frame(width: 5, height: 5)
                 }
             }
             .foregroundStyle(isSelected ? .white : .white.opacity(0.42))

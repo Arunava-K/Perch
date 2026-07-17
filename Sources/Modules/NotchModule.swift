@@ -20,10 +20,14 @@ protocol NotchModule: AnyObject {
     var icon: String { get }
     /// A live dot on the tab (e.g. music playing).
     var indicator: Bool { get }
+    /// Color for the indicator dot (nil = use default green).
+    var indicatorColor: Color? { get }
     /// Preferred height of the expanded notch while this module's tab is shown.
     var preferredExpandedHeight: CGFloat { get }
     /// Whether items dropped on the notch should route here.
     var acceptsDrops: Bool { get }
+    /// Hide from the tab bar (shown only via an ear button).
+    var hiddenFromTabBar: Bool { get }
     func handleDrop(_ providers: [NSItemProvider])
     /// The content shown when this module's tab is selected.
     func makeContent(_ context: ModuleContext) -> AnyView
@@ -31,8 +35,10 @@ protocol NotchModule: AnyObject {
 
 extension NotchModule {
     var indicator: Bool { false }
+    var indicatorColor: Color? { nil }
     var preferredExpandedHeight: CGFloat { 180 }
     var acceptsDrops: Bool { false }
+    var hiddenFromTabBar: Bool { false }
     func handleDrop(_ providers: [NSItemProvider]) {}
 }
 
@@ -63,15 +69,18 @@ final class ModuleRegistry: ObservableObject {
         self.selectedID = saved.first { !disabledSet.contains($0) } ?? ids.first ?? ""
     }
 
-    /// Visible modules: enabled, in display order.
+    /// Visible modules: enabled, in display order (excludes hiddenFromTabBar).
     var modules: [any NotchModule] {
         order.compactMap { id in
-            disabled.contains(id) ? nil : allModules.first { $0.id == id }
+            guard let m = allModules.first(where: { $0.id == id }), !disabled.contains(id), !m.hiddenFromTabBar else { return nil }
+            return m
         }
     }
 
     func module(_ id: String) -> (any NotchModule)? { allModules.first { $0.id == id } }
-    var selected: (any NotchModule)? { modules.first { $0.id == selectedID } ?? modules.first }
+    var selected: (any NotchModule)? {
+        modules.first { $0.id == selectedID } ?? allModules.first { $0.id == selectedID } ?? modules.first
+    }
     var dropModule: (any NotchModule)? { modules.first { $0.acceptsDrops } }
 
     func select(_ id: String) {
@@ -92,7 +101,7 @@ final class ModuleRegistry: ObservableObject {
     func isEnabled(_ id: String) -> Bool { !disabled.contains(id) }
 
     private func fixSelection() {
-        if !modules.contains(where: { $0.id == selectedID }) {
+        if !modules.contains(where: { $0.id == selectedID }) && !allModules.contains(where: { $0.id == selectedID && $0.hiddenFromTabBar }) {
             selectedID = modules.first?.id ?? selectedID
         }
     }

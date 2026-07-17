@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var calendarManager: CalendarManager?
     private var reminderManager: ReminderManager?
     private var weatherManager: WeatherManager?
+    private var systemMonitorManager: SystemMonitorManager?
     private var cameraManager: CameraManager?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
@@ -67,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let weatherManager = WeatherManager()
         self.weatherManager = weatherManager
 
+        // System monitor: CPU, memory, disk, battery.
+        let systemMonitorManager = SystemMonitorManager()
+        systemMonitorManager.start()
+        self.systemMonitorManager = systemMonitorManager
+
         // Register the notch modules (tab order = registration order).
         let registry = ModuleRegistry(modules: [
             ClipboardModule(store: clipStore),
@@ -74,10 +80,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             TimerModule(timer: timerEngine),
             CalendarModule(calendar: calendarManager, reminders: reminderManager),
             MusicModule(music: musicManager),
+            SystemMonitorModule(monitor: systemMonitorManager),
         ])
         self.moduleRegistry = registry
 
-        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, weather: weatherManager, camera: cameraManager)
+        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, weather: weatherManager, systemMonitor: systemMonitorManager, camera: cameraManager)
         notchController.show()
         self.notchController = notchController
 
