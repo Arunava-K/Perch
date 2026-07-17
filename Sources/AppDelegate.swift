@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timerEngine: TimerEngine?
     private var calendarManager: CalendarManager?
     private var reminderManager: ReminderManager?
+    private var weatherManager: WeatherManager?
     private var cameraManager: CameraManager?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
@@ -62,6 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cameraManager = CameraManager()
         self.cameraManager = cameraManager
 
+        // Weather badge: current conditions from Open-Meteo (free, no key).
+        let weatherManager = WeatherManager()
+        self.weatherManager = weatherManager
+
         // Register the notch modules (tab order = registration order).
         let registry = ModuleRegistry(modules: [
             ClipboardModule(store: clipStore),
@@ -72,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
         self.moduleRegistry = registry
 
-        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, camera: cameraManager)
+        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, weather: weatherManager, camera: cameraManager)
         notchController.show()
         self.notchController = notchController
 
@@ -150,6 +155,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start reading events / reminders only if the user opted in previously.
         calendarManager.startIfEnabled()
         reminderManager.startIfEnabled()
+
+        // Weather auto-starts (passive badge, no opt-in needed).
+        weatherManager.start()
 
         let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager, reminders: reminderManager)
         self.settingsController = settingsController

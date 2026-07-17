@@ -63,6 +63,8 @@ targets:
         # Required to show incomplete reminders in the notch (opt-in).
         NSRemindersUsageDescription: "Perch shows your incomplete reminders grouped by urgency in the notch."
         NSRemindersFullAccessUsageDescription: "Perch shows your incomplete reminders grouped by urgency in the notch."
+        # Required to show current weather conditions (optional location lookup).
+        NSLocationWhenInUseUsageDescription: "Perch uses your location to show the current weather in the notch."
         # Required for the webcam mirror (camera preview in the notch).
         NSCameraUsageDescription: "Perch shows a live mirror from your camera in the notch so you can check yourself before a call."
         # Sparkle auto-update. Fill in before shipping (see RELEASING.md):

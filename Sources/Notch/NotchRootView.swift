@@ -15,6 +15,8 @@ struct NotchRootView: View {
     @ObservedObject var calendar: CalendarManager
     /// Webcam mirror, toggled from the top-right corner button.
     @ObservedObject var camera: CameraManager
+    /// Weather badge in the top-right ear.
+    @ObservedObject var weather: WeatherManager
     /// Opens the Settings window (gear button in the top-right ear).
     let onOpenSettings: () -> Void
 
@@ -124,6 +126,8 @@ struct NotchRootView: View {
                 // Tabs in the top-left "ear", webcam toggle in the top-right ear.
                 HStack(alignment: .center, spacing: 0) {
                     NotchTabBar(modules: registry.modules, selectedID: $registry.selectedID)
+                    Spacer(minLength: 0)
+                    WeatherBadge(weather: weather)
                     webcamButton
                     settingsButton
                 }
