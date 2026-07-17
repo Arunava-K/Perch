@@ -39,9 +39,9 @@ settings:
     # Debug dylib when signed by a self-signed cert (no Team ID).
     Debug:
       ENABLE_HARDENED_RUNTIME: NO
-    # On for Release / notarized Developer ID builds.
+    # Off for unsigned distribution (hardened runtime requires Developer ID).
     Release:
-      ENABLE_HARDENED_RUNTIME: YES
+      ENABLE_HARDENED_RUNTIME: NO
 
 targets:
   Perch:
@@ -67,9 +67,8 @@ targets:
         NSLocationWhenInUseUsageDescription: "Perch uses your location to show the current weather in the notch."
         # Required for the webcam mirror (camera preview in the notch).
         NSCameraUsageDescription: "Perch shows a live mirror from your camera in the notch so you can check yourself before a call."
-        # Sparkle auto-update. Fill in before shipping (see RELEASING.md):
-        #   SUFeedURL: your published appcast.xml URL
-        #   SUPublicEDKey: the EdDSA public key from Sparkle's generate_keys
+        # Sparkle auto-update is dormant until these are configured.
+        # See RELEASING.md if you set up a Developer ID + Sparkle feed.
         SUFeedURL: "https://example.com/perch/appcast.xml"
         SUEnableAutomaticChecks: false
         SUPublicEDKey: ""
