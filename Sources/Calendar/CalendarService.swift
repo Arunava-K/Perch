@@ -1,7 +1,7 @@
 import SwiftUI
 @preconcurrency import EventKit
 
-/// Whether Mybar can read calendar events — our own enum so EventKit stays
+/// Whether Perch can read calendar events — our own enum so EventKit stays
 /// confined to this file (the rest of the app never imports it).
 enum CalendarAccess {
     case notDetermined, granted, denied

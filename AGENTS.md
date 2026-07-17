@@ -8,22 +8,22 @@
 
 ## Build And Verify
 
-- `project.yml` is the source of truth. `Mybar.xcodeproj` and `Sources/Info.plist` are generated and ignored; run `xcodegen generate` after changing the project definition or package configuration.
+- `project.yml` is the source of truth. `Perch.xcodeproj` and `Sources/Info.plist` are generated and ignored; run `xcodegen generate` after changing the project definition or package configuration.
 - Local command-line verification:
   ```sh
   xcodegen generate
-  xcodebuild -project Mybar.xcodeproj -scheme Mybar -configuration Debug \
+  xcodebuild -project Perch.xcodeproj -scheme Perch -configuration Debug \
     -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-  open build/Build/Products/Debug/Mybar.app
+  open build/Build/Products/Debug/Perch.app
   ```
 - The repository has no test target, lint task, formatter task, CI workflow, or pre-commit hook. Treat a successful Xcode build plus focused manual verification as the available check.
-- The app has no normal window or Dock icon; inspect the notch/menu-bar item after launching. Stop a command-line-launched instance with `pkill -x Mybar`.
+- The app has no normal window or Dock icon; inspect the notch/menu-bar item after launching. Stop a command-line-launched instance with `pkill -x Perch`.
 
 ## Data And Runtime Constraints
 
-- Clip data currently lives in SQLite at `~/Library/Application Support/Mybar/mybar.sqlite`, managed through GRDB migrations in `Sources/Database/AppDatabase.swift` and repository operations in `ClipRepository.swift`. `clips.json`/`shelf.json` are legacy inputs imported once, not the active store.
+- Clip data currently lives in SQLite at `~/Library/Application Support/Perch/perch.sqlite`, managed through GRDB migrations in `Sources/Database/AppDatabase.swift` and repository operations in `ClipRepository.swift`. `clips.json`/`shelf.json` are legacy inputs imported once, not the active store.
 - Schema changes must be added as a new ordered `DatabaseMigrator` migration. Do not edit an existing migration that may already have run for users.
-- Image payloads are content-addressed PNG sidecars under `~/Library/Application Support/Mybar/blobs`; preserve repository reference cleanup when changing clip deletion or storage behavior.
+- Image payloads are content-addressed PNG sidecars under `~/Library/Application Support/Perch/blobs`; preserve repository reference cleanup when changing clip deletion or storage behavior.
 - Paste-back and media-key interception require Accessibility/Input Monitoring permissions. Apple Music/Spotify integration requires Automation permission; notification mirroring requires Full Disk Access; Calendar and camera features are opt-in and permission-gated. These paths cannot be fully exercised headlessly.
 - This is deliberately non-sandboxed direct distribution because clipboard polling, Accessibility paste-back, and security-scoped file access depend on it.
 

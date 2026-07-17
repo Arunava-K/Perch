@@ -1,4 +1,4 @@
-name: Mybar
+name: Perch
 options:
   bundleIdPrefix: com.steinerco
   createIntermediateGroups: true
@@ -22,7 +22,7 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    PRODUCT_BUNDLE_IDENTIFIER: com.steinerco.mybar
+    PRODUCT_BUNDLE_IDENTIFIER: com.arunavak.perch
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: NO
@@ -30,7 +30,7 @@ settings:
     # Stable self-signed identity so macOS Accessibility/Input-Monitoring grants
     # survive rebuilds (ad-hoc signing changes the code hash every build).
     CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "Mybar Dev"
+    CODE_SIGN_IDENTITY: "Perch Dev"
     DEVELOPMENT_TEAM: ""
     PROVISIONING_PROFILE_SPECIFIER: ""
     DEAD_CODE_STRIPPING: YES
@@ -44,7 +44,7 @@ settings:
       ENABLE_HARDENED_RUNTIME: YES
 
 targets:
-  Mybar:
+  Perch:
     type: application
     platform: macOS
     info:
@@ -56,16 +56,16 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSHumanReadableCopyright: "© 2026 Steiner & Co"
         # Required to query Apple Music / Spotify for now-playing via AppleScript.
-        NSAppleEventsUsageDescription: "Mybar reads now-playing info from Apple Music and Spotify to show it in the notch."
+        NSAppleEventsUsageDescription: "Perch reads now-playing info from Apple Music and Spotify to show it in the notch."
         # Required to show today's events and the next-meeting countdown (opt-in).
-        NSCalendarsUsageDescription: "Mybar shows your upcoming events and counts down to your next meeting in the notch."
-        NSCalendarsFullAccessUsageDescription: "Mybar shows your upcoming events and counts down to your next meeting in the notch."
+        NSCalendarsUsageDescription: "Perch shows your upcoming events and counts down to your next meeting in the notch."
+        NSCalendarsFullAccessUsageDescription: "Perch shows your upcoming events and counts down to your next meeting in the notch."
         # Required for the webcam mirror (camera preview in the notch).
-        NSCameraUsageDescription: "Mybar shows a live mirror from your camera in the notch so you can check yourself before a call."
+        NSCameraUsageDescription: "Perch shows a live mirror from your camera in the notch so you can check yourself before a call."
         # Sparkle auto-update. Fill in before shipping (see RELEASING.md):
         #   SUFeedURL: your published appcast.xml URL
         #   SUPublicEDKey: the EdDSA public key from Sparkle's generate_keys
-        SUFeedURL: "https://example.com/mybar/appcast.xml"
+        SUFeedURL: "https://example.com/perch/appcast.xml"
         SUEnableAutomaticChecks: false
         SUPublicEDKey: ""
     sources:

@@ -1,6 +1,6 @@
-# Releasing Mybar
+# Releasing Perch
 
-Mybar ships as a **direct download** (not the Mac App Store), so it must be
+Perch ships as a **direct download** (not the Mac App Store), so it must be
 **code-signed with a Developer ID and notarized** by Apple, and auto-updates via
 **Sparkle**. The steps below require credentials that only you (the developer)
 hold — they can't be performed in CI without your secrets.
@@ -16,7 +16,7 @@ hold — they can't be performed in CI without your secrets.
   ```
 - Store notarization credentials once:
   ```sh
-  xcrun notarytool store-credentials MybarNotary \
+  xcrun notarytool store-credentials PerchNotary \
     --apple-id "you@example.com" --team-id TEAMID --password <app-specific-password>
   ```
 
@@ -36,7 +36,7 @@ Sparkle signs updates with an EdDSA key so clients can verify them.
 3. Put the public key in `project.yml` under the target's `info.properties`:
    ```yaml
    SUPublicEDKey: "<base64 public key>"
-   SUFeedURL: "https://your.site/mybar/appcast.xml"
+   SUFeedURL: "https://your.site/perch/appcast.xml"
    SUEnableAutomaticChecks: true
    ```
 4. Re-run `xcodegen generate`.
@@ -58,10 +58,10 @@ Updates…" explains that updates are not configured.
    - enables hardened runtime, notarizes, staples, and runs `spctl --assess`
 3. Sign the zip for Sparkle and grab the EdDSA signature + length:
    ```sh
-   ./bin/sign_update Mybar.zip
+   ./bin/sign_update Perch.zip
    ```
 4. Add an `<item>` to `appcast.xml` with the new version, the signature, and the
-   download URL, then upload `Mybar.zip` and `appcast.xml` to the host that
+   download URL, then upload `Perch.zip` and `appcast.xml` to the host that
    `SUFeedURL` points at.
 5. Existing installs see the update on their next check (or via
    **Check for Updates…** in the menu/Settings).
@@ -70,7 +70,7 @@ Updates…" explains that updates are not configured.
 - Distribution decision: **non-sandboxed direct download** — required because
   clipboard polling, Accessibility paste-back, and security-scoped bookmarks are
   heavily restricted under the App Store sandbox.
-- Local Debug builds keep hardened runtime **off** (self-signed "Mybar Dev"
+- Local Debug builds keep hardened runtime **off** (self-signed "Perch Dev"
   identity). Release builds and `scripts/release.sh` enable it for notarization.
 - Package versions are pinned with `exactVersion` in `project.yml` so release
   builds do not silently pick newer SPM tags.

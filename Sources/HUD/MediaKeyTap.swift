@@ -1,6 +1,6 @@
 import AppKit
 
-/// Intercepts the hardware volume keys via a CGEvent tap so Mybar can show its
+/// Intercepts the hardware volume keys via a CGEvent tap so Perch can show its
 /// own HUD instead of the system one. Requires Accessibility / Input Monitoring;
 /// if that's not granted, `start()` fails gracefully and the system HUD stays.
 final class MediaKeyTap {

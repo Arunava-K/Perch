@@ -12,12 +12,12 @@ final class ClipRepository {
 
     private func read<T>(_ operation: (Database) throws -> T) -> T? {
         guard let dbQueue else {
-            NSLog("Mybar: database read skipped because the database is unavailable")
+            NSLog("Perch: database read skipped because the database is unavailable")
             return nil
         }
         do { return try dbQueue.read(operation) }
         catch {
-            NSLog("Mybar: database read failed: \(error)")
+            NSLog("Perch: database read failed: \(error)")
             return nil
         }
     }
@@ -25,14 +25,14 @@ final class ClipRepository {
     @discardableResult
     private func write(_ operation: (Database) throws -> Void) -> Bool {
         guard let dbQueue else {
-            NSLog("Mybar: database write skipped because the database is unavailable")
+            NSLog("Perch: database write skipped because the database is unavailable")
             return false
         }
         do {
             try dbQueue.write(operation)
             return true
         } catch {
-            NSLog("Mybar: database write failed: \(error)")
+            NSLog("Perch: database write failed: \(error)")
             return false
         }
     }
@@ -139,7 +139,7 @@ final class ClipRepository {
 
     func applyLock(id: UUID, lockedKind: ClipKind, sealed: Data) -> Bool {
         guard let kindData = try? JSONEncoder().encode(lockedKind) else {
-            NSLog("Mybar: could not encode locked clip")
+            NSLog("Perch: could not encode locked clip")
             return false
         }
         return write { db in
@@ -156,7 +156,7 @@ final class ClipRepository {
 
     func removeLock(id: UUID, kind: ClipKind, searchText: String) -> Bool {
         guard let kindData = try? JSONEncoder().encode(kind) else {
-            NSLog("Mybar: could not encode unlocked clip")
+            NSLog("Perch: could not encode unlocked clip")
             return false
         }
         return write { db in
@@ -225,11 +225,11 @@ final class ClipRepository {
                 }
             }
             guard FileManager.default.createFile(atPath: marker.path, contents: nil) else {
-                NSLog("Mybar: could not write legacy migration marker")
+                NSLog("Perch: could not write legacy migration marker")
                 return
             }
         } catch {
-            NSLog("Mybar: legacy JSON migration failed and will be retried: \(error)")
+            NSLog("Perch: legacy JSON migration failed and will be retried: \(error)")
         }
     }
 

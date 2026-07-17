@@ -16,7 +16,7 @@ final class CameraManager: ObservableObject {
     /// the width with the height following (no letterboxing). Defaults to 16:9.
     @Published private(set) var aspectRatio: CGFloat = 16.0 / 9.0
 
-    private let sessionQueue = DispatchQueue(label: "com.steinerco.mybar.camera")
+    private let sessionQueue = DispatchQueue(label: "com.arunavak.perch.camera")
     private var configured = false
     private var wantsRunning = false
     private var requestingAccess = false

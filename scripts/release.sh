@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Build, sign, notarize, and package Mybar for direct (non-App-Store) distribution.
+# Build, sign, notarize, and package Perch for direct (non-App-Store) distribution.
 #
 # Prerequisites (one-time — see RELEASING.md):
 #   - A "Developer ID Application" certificate in your login keychain.
-#   - A notarytool keychain profile: `xcrun notarytool store-credentials MybarNotary`.
+#   - A notarytool keychain profile: `xcrun notarytool store-credentials PerchNotary`.
 #   - Sparkle keys generated and SUPublicEDKey + SUFeedURL set in project.yml.
 #
 # Usage:
@@ -12,11 +12,11 @@
 #
 set -euo pipefail
 
-APP_NAME="Mybar"
-SCHEME="Mybar"
+APP_NAME="Perch"
+SCHEME="Perch"
 CONFIG="Release"
 BUILD_DIR="build/release"
-NOTARY_PROFILE="${NOTARY_PROFILE:-MybarNotary}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-PerchNotary}"
 ALLOW_UNCONFIGURED_SPARKLE="${ALLOW_UNCONFIGURED_SPARKLE:-0}"
 
 : "${DEV_ID:?Set DEV_ID to your 'Developer ID Application: … (TEAMID)' identity}"

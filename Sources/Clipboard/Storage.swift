@@ -1,11 +1,11 @@
 import AppKit
 import CryptoKit
 
-/// Resolves Mybar's Application Support directory, creating it on first use.
+/// Resolves Perch's Application Support directory, creating it on first use.
 enum AppPaths {
     static let root: URL = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = support.appendingPathComponent("Mybar", isDirectory: true)
+        let dir = support.appendingPathComponent("Perch", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -35,7 +35,7 @@ final class BlobStore {
             try data.write(to: url, options: .atomic)
             return (file, hash)
         } catch {
-            NSLog("Mybar: could not save image blob: \(error)")
+            NSLog("Perch: could not save image blob: \(error)")
             return nil
         }
     }

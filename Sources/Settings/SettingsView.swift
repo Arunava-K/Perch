@@ -200,7 +200,7 @@ private struct NotificationsPane: View {
                 } header: {
                     Text("Do Not Disturb Pairing")
                 } footer: {
-                    Text("macOS has no public way to toggle Focus, so Mybar runs Shortcuts you provide. Create two shortcuts — each a “Set Focus” action, one turning a Focus On and one Off — then pick them above. While mirroring is on, the Focus hides native banners; the notch still shows them.")
+                    Text("macOS has no public way to toggle Focus, so Perch runs Shortcuts you provide. Create two shortcuts — each a “Set Focus” action, one turning a Focus On and one Off — then pick them above. While mirroring is on, the Focus hides native banners; the notch still shows them.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -384,7 +384,7 @@ private struct AboutPane: View {
                 Button("Check for Updates…") {
                     UpdaterController.shared.checkForUpdates()
                 }
-                Link("github.com/Steiner&Co/Mybar",
+                Link("github.com/Arunava-K/Perch",
                      destination: URL(string: "https://github.com")!)
             }
         }

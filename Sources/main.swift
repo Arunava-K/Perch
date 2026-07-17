@@ -1,6 +1,6 @@
 import Cocoa
 
-// Mybar runs as a menu-bar / accessory app: no Dock icon, no main window.
+// Perch runs as a menu-bar / accessory app: no Dock icon, no main window.
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     let delegate = AppDelegate()

@@ -13,7 +13,7 @@ enum VaultError: Error {
 /// in the Keychain behind a biometric/user-presence access control, so reading
 /// it triggers Touch ID (or a password fallback). Created lazily on first lock.
 enum VaultKey {
-    private static let service = "com.steinerco.mybar.vault"
+    private static let service = "com.arunavak.perch.vault"
     private static let account = "clip-encryption-key"
 
     /// Returns the key, creating it on first use. May prompt for Touch ID.

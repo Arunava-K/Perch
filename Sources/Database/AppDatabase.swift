@@ -12,7 +12,7 @@ final class AppDatabase {
         do {
             return try AppDatabase()
         } catch {
-            NSLog("Mybar: database unavailable; clipboard persistence is disabled: \(error)")
+            NSLog("Perch: database unavailable; clipboard persistence is disabled: \(error)")
             return nil
         }
     }()
@@ -20,7 +20,7 @@ final class AppDatabase {
     let dbQueue: DatabaseQueue
 
     init() throws {
-        let url = AppPaths.root.appendingPathComponent("mybar.sqlite")
+        let url = AppPaths.root.appendingPathComponent("perch.sqlite")
         var config = Configuration()
         config.foreignKeysEnabled = true
         dbQueue = try DatabaseQueue(path: url.path, configuration: config)

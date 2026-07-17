@@ -43,7 +43,7 @@ final class StatusBarController {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             item.button?.image = NSImage(
                 systemSymbolName: "rectangle.topthird.inset.filled",
-                accessibilityDescription: "Mybar"
+                accessibilityDescription: "Perch"
             )
             item.menu = menu
             statusItem = item
@@ -80,12 +80,12 @@ final class StatusBarController {
             keyEquivalent: ""
         ).target = self
         menu.addItem(
-            withTitle: "About Mybar",
+            withTitle: "About Perch",
             action: #selector(about),
             keyEquivalent: ""
         ).target = self
         menu.addItem(
-            withTitle: "Quit Mybar",
+            withTitle: "Quit Perch",
             action: #selector(quit),
             keyEquivalent: "q"
         ).target = self

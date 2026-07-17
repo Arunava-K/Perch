@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 libraryController?.show()
             },
             PaletteCommand(id: "open-settings", title: "Open Settings",
-                           subtitle: "Adjust Mybar's preferences.",
+                           subtitle: "Adjust Perch's preferences.",
                            icon: "gearshape",
                            keywords: ["settings", "preferences", "config"]) { [weak settingsController] in
                 settingsController?.show()
@@ -213,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 clipStore?.clear()
             },
             PaletteCommand(id: "check-updates", title: "Check for Updates",
-                           subtitle: "See if a newer Mybar is available.",
+                           subtitle: "See if a newer Perch is available.",
                            icon: "arrow.down.circle",
                            keywords: ["update", "upgrade", "version"]) {
                 UpdaterController.shared.checkForUpdates()
@@ -262,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Don't leave the user stuck in the paired Focus after Mybar quits.
+        // Don't leave the user stuck in the paired Focus after Perch quits.
         focusPairing?.deactivateForQuit()
     }
 }

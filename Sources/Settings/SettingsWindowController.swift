@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Owns the Settings window. Because Mybar is an accessory app (no Dock icon),
+/// Owns the Settings window. Because Perch is an accessory app (no Dock icon),
 /// we temporarily switch to `.regular` activation while the window is open so it
 /// can take focus, then back to `.accessory` when it closes.
 @MainActor
@@ -19,7 +19,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if window == nil {
             let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar))
             let window = NSWindow(contentViewController: hosting)
-            window.title = "Mybar Settings"
+            window.title = "Perch Settings"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.setContentSize(NSSize(width: 720, height: 540))
             window.isReleasedWhenClosed = false

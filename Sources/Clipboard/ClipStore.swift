@@ -26,7 +26,7 @@ final class ClipStore: ObservableObject {
 
     /// Serial queue for embedding work — NLEmbedding isn't safe to call from many
     /// threads at once, so we compute vectors one at a time, off the main thread.
-    private let embeddingQueue = DispatchQueue(label: "com.steinerco.mybar.embedding", qos: .utility)
+    private let embeddingQueue = DispatchQueue(label: "com.arunavak.perch.embedding", qos: .utility)
 
     init() {
         items = repo.load(.history)
@@ -274,7 +274,7 @@ final class ClipStore: ObservableObject {
         let realKind = items[idx].kind
         do {
             let json = try JSONEncoder().encode(realKind)
-            let sealed = try ClipCrypto.seal(json, reason: "Lock this clip in Mybar")
+            let sealed = try ClipCrypto.seal(json, reason: "Lock this clip in Perch")
             let lockedKind = ClipKind.locked(type: realKind.typeName)
             guard repo.applyLock(id: id, lockedKind: lockedKind, sealed: sealed) else { return }
             items[idx].kind = lockedKind
@@ -283,7 +283,7 @@ final class ClipStore: ObservableObject {
             // Locked content must not be semantically searchable.
             dropEmbedding(for: id)
         } catch {
-            NSLog("Mybar: lock failed — \(error)")
+            NSLog("Perch: lock failed — \(error)")
         }
     }
 
@@ -299,7 +299,7 @@ final class ClipStore: ObservableObject {
             revealedIDs.insert(id)
             return true
         } catch {
-            NSLog("Mybar: reveal failed — \(error)")
+            NSLog("Perch: reveal failed — \(error)")
             return false
         }
     }
