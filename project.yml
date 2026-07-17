@@ -8,7 +8,7 @@ options:
 packages:
   Defaults:
     url: https://github.com/sindresorhus/Defaults
-    exactVersion: "9.0.8"
+    exactVersion: "9.0.6"
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: "2.4.0"
