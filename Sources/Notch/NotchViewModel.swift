@@ -26,7 +26,8 @@ final class NotchViewModel: ObservableObject {
     @Published var isTimerActive = false
     /// True while the next event is imminent — the collapsed notch counts down to it.
     @Published var isCalendarActive = false
-    /// True while there are overdue or today-due reminders.
+    /// True while system load is elevated — compact CPU/mem flank in the idle notch.
+    @Published var isSystemLoadActive = false
     @Published var metrics: NotchMetrics
     /// Expanded height of the currently-selected tab (modules can differ).
     @Published var expandedHeight: CGFloat = 180
@@ -117,6 +118,11 @@ final class NotchViewModel: ObservableObject {
         CGSize(width: metrics.notchSize.width + 118, height: metrics.notchSize.height)
     }
 
+    /// Elevated system-load size — cpu icon + % flanking the camera.
+    var systemLoadSize: CGSize {
+        CGSize(width: metrics.notchSize.width + 96, height: metrics.notchSize.height)
+    }
+
     /// The window is always sized to the largest state so content can animate
     /// inside it without resizing the window itself.
     var windowSize: CGSize {
@@ -132,6 +138,7 @@ final class NotchViewModel: ObservableObject {
         if isTimerActive { return timerSize }
         if isCalendarActive { return calendarSize }
         if isMediaActive { return collapsedMediaSize }
+        if isSystemLoadActive { return systemLoadSize }
         return collapsedSize
     }
 

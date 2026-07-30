@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import Defaults
 
 /// Creates the notch panel, positions it under the hardware notch, and keeps
 /// the click-through hit region in sync with the expand/collapse state.
@@ -105,6 +106,23 @@ final class NotchWindowController {
             self?.model.showMessage(symbol: "calendar", text: "\(event.title) · \(event.relativeString())")
         }
 
+        // Elevated load flank when nothing higher-priority is showing.
+        systemMonitor.$stats
+            .combineLatest(systemMonitor.$topProcesses.map { _ in () })
+            .receive(on: RunLoop.main)
+            .sink { [weak self] stats, _ in
+                guard let self else { return }
+                let enabled = Defaults[.systemMonitorCollapsedActivity]
+                let threshold = Defaults[.systemMonitorCollapsedThreshold]
+                let metric = Defaults[.systemMonitorBadgeMetric]
+                let load = stats.load(for: metric)
+                let active = enabled && load >= threshold
+                guard self.model.isSystemLoadActive != active else { return }
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self.model.isSystemLoadActive = active
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: Hover via cursor polling

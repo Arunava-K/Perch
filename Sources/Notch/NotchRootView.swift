@@ -190,6 +190,10 @@ struct NotchRootView: View {
             CollapsedMediaView(music: music)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity)
+        } else if model.isSystemLoadActive {
+            CollapsedSystemLoadView(monitor: systemMonitor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
         }
     }
 

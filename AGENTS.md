@@ -39,7 +39,10 @@
 ## System Monitor Module
 
 - `SystemMonitorManager` polls per-core CPU (P/E split via Mach host_processor_info + sysctl perflevel), memory breakdown (wired/active/compressed/inactive/free via vm_statistics64), GPU (AGXAccelerator IOKit), swap (vm.swapusage), thermal state (ProcessInfo), disk, battery every 2s.
+- Per-core usage = busyΔ / totalΔ **per core** (not divided by sum of all cores). Top processes via `proc_listpids` + `PROC_PIDTASKINFO` deltas.
 - `SystemMonitorTab` is four Control Center–style tiles (CPU, Memory, Disk, GPU): large value, quiet detail line, hairline progress. Soft white at rest; yellow/red only under load. No battery row.
 - CPU detail shows P/E %; GPU detail shows thermal state (Cool/Warm/Hot).
-- Load badge / module indicator use `max(cpuUsage, memoryPressure)`.
+- Load badge / module indicator / collapsed flank use `Defaults[.systemMonitorBadgeMetric]` (max / cpu / memory).
+- Collapsed idle flank when load ≥ threshold and timer/calendar/media inactive (`CollapsedSystemLoadView`).
+- Settings → System: collapsed activity, threshold, badge metric, tile visibility.
 - `SystemMonitorModule` sets `hiddenFromTabBar: true`; ear layout: WeatherBadge → webcam → SystemLoadBadge → settings.

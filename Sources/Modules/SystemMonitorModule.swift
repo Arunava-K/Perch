@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 @MainActor
 final class SystemMonitorModule: NotchModule {
@@ -10,7 +11,7 @@ final class SystemMonitorModule: NotchModule {
     init(monitor: SystemMonitorManager) { self.monitor = monitor }
 
     var icon: String {
-        let load = max(monitor.stats.cpuUsage, monitor.stats.memoryPressure)
+        let load = monitor.stats.load(for: Defaults[.systemMonitorBadgeMetric])
         if load < 0.35 { return "chart.bar.fill" }
         if load < 0.65 { return "chart.bar" }
         return "chart.bar.doc.horizontal.fill"
@@ -19,7 +20,7 @@ final class SystemMonitorModule: NotchModule {
     var indicator: Bool { true }
 
     var indicatorColor: Color? {
-        let load = max(monitor.stats.cpuUsage, monitor.stats.memoryPressure)
+        let load = monitor.stats.load(for: Defaults[.systemMonitorBadgeMetric])
         if load > 0.8 { return .red }
         if load > 0.5 { return .yellow }
         return .green
@@ -27,7 +28,7 @@ final class SystemMonitorModule: NotchModule {
 
     var hiddenFromTabBar: Bool { true }
 
-    var preferredExpandedHeight: CGFloat { 200 }
+    var preferredExpandedHeight: CGFloat { 230 }
 
     func makeContent(_ context: ModuleContext) -> AnyView {
         AnyView(SystemMonitorTab(monitor: monitor))

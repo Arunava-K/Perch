@@ -89,4 +89,20 @@ extension Defaults.Keys {
 
     /// Module ids the user has hidden.
     static let disabledModules = Key<[String]>("disabledModules", default: [])
+
+    // MARK: System monitor
+
+    /// Show a compact load flank in the collapsed notch when load is elevated.
+    static let systemMonitorCollapsedActivity = Key<Bool>("systemMonitorCollapsedActivity", default: true)
+
+    /// Load fraction (0…1) at which the collapsed flank appears.
+    static let systemMonitorCollapsedThreshold = Key<Double>("systemMonitorCollapsedThreshold", default: 0.5)
+
+    /// Which metric feeds the ear badge and collapsed flank.
+    static let systemMonitorBadgeMetric = Key<SystemLoadBadgeMetric>("systemMonitorBadgeMetric", default: .max)
+
+    static let systemMonitorShowCPU = Key<Bool>("systemMonitorShowCPU", default: true)
+    static let systemMonitorShowMemory = Key<Bool>("systemMonitorShowMemory", default: true)
+    static let systemMonitorShowDisk = Key<Bool>("systemMonitorShowDisk", default: true)
+    static let systemMonitorShowGPU = Key<Bool>("systemMonitorShowGPU", default: true)
 }

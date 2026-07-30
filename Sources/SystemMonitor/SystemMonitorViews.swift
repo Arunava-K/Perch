@@ -1,45 +1,64 @@
 import SwiftUI
+import Defaults
 
 /// Control Center–style system monitor: equal metric tiles, monochrome tracks,
-/// color only under load. No rainbow charts, no empty dual cards.
+/// color only under load. Top processes footer under the tiles.
 struct SystemMonitorTab: View {
     @ObservedObject var monitor: SystemMonitorManager
 
+    @Default(.systemMonitorShowCPU) private var showCPU
+    @Default(.systemMonitorShowMemory) private var showMemory
+    @Default(.systemMonitorShowDisk) private var showDisk
+    @Default(.systemMonitorShowGPU) private var showGPU
+
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             HStack(spacing: 8) {
-                metricTile(
-                    title: "CPU",
-                    value: "\(pct(monitor.stats.cpuUsage))",
-                    unit: "%",
-                    detail: cpuDetail,
-                    fraction: monitor.stats.cpuUsage,
-                    tint: loadTint(monitor.stats.cpuUsage, warn: 0.55, crit: 0.85)
-                )
-                metricTile(
-                    title: "Memory",
-                    value: shortGB(monitor.stats.memoryUsed),
-                    unit: "GB",
-                    detail: "of \(shortGB(monitor.stats.memoryTotal)) GB",
-                    fraction: monitor.stats.memoryPressure,
-                    tint: loadTint(monitor.stats.memoryPressure, warn: 0.7, crit: 0.9)
-                )
-                metricTile(
-                    title: "Disk",
-                    value: shortGB(monitor.stats.diskUsed),
-                    unit: "GB",
-                    detail: "of \(shortGB(monitor.stats.diskTotal)) GB",
-                    fraction: monitor.stats.diskFraction,
-                    tint: loadTint(monitor.stats.diskFraction, warn: 0.85, crit: 0.95)
-                )
-                metricTile(
-                    title: "GPU",
-                    value: "\(pct(monitor.stats.gpuUsage))",
-                    unit: "%",
-                    detail: thermalDetail,
-                    fraction: monitor.stats.gpuUsage,
-                    tint: loadTint(monitor.stats.gpuUsage, warn: 0.55, crit: 0.85)
-                )
+                if showCPU {
+                    metricTile(
+                        title: "CPU",
+                        value: "\(pct(monitor.stats.cpuUsage))",
+                        unit: "%",
+                        detail: cpuDetail,
+                        fraction: monitor.stats.cpuUsage,
+                        tint: loadTint(monitor.stats.cpuUsage, warn: 0.55, crit: 0.85)
+                    )
+                }
+                if showMemory {
+                    metricTile(
+                        title: "Memory",
+                        value: shortGB(monitor.stats.memoryUsed),
+                        unit: "GB",
+                        detail: "of \(shortGB(monitor.stats.memoryTotal)) GB",
+                        fraction: monitor.stats.memoryPressure,
+                        tint: loadTint(monitor.stats.memoryPressure, warn: 0.7, crit: 0.9)
+                    )
+                }
+                if showDisk {
+                    metricTile(
+                        title: "Disk",
+                        value: shortGB(monitor.stats.diskUsed),
+                        unit: "GB",
+                        detail: "of \(shortGB(monitor.stats.diskTotal)) GB",
+                        fraction: monitor.stats.diskFraction,
+                        tint: loadTint(monitor.stats.diskFraction, warn: 0.85, crit: 0.95)
+                    )
+                }
+                if showGPU {
+                    metricTile(
+                        title: "GPU",
+                        value: "\(pct(monitor.stats.gpuUsage))",
+                        unit: "%",
+                        detail: thermalDetail,
+                        fraction: monitor.stats.gpuUsage,
+                        tint: loadTint(monitor.stats.gpuUsage, warn: 0.55, crit: 0.85)
+                    )
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            if !monitor.topProcesses.isEmpty {
+                processFooter
             }
         }
         .padding(.horizontal, 20)
@@ -83,7 +102,6 @@ struct SystemMonitorTab: View {
 
             Spacer(minLength: 10)
 
-            // Hairline track — monochrome fill, tint only when elevated
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -103,6 +121,44 @@ struct SystemMonitorTab: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.white.opacity(0.045))
         )
+    }
+
+    // MARK: Top processes
+
+    private var processFooter: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(monitor.topProcesses.prefix(4).enumerated()), id: \.element.id) { index, proc in
+                if index > 0 {
+                    Rectangle()
+                        .fill(.white.opacity(0.08))
+                        .frame(width: 1)
+                        .padding(.vertical, 4)
+                }
+                processChip(proc)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(0.045))
+        )
+    }
+
+    private func processChip(_ proc: TopProcess) -> some View {
+        HStack(spacing: 6) {
+            Text(proc.name)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+            Spacer(minLength: 2)
+            Text("\(pct(proc.cpuFraction))%")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.45))
+        }
+        .padding(.horizontal, 6)
     }
 
     // MARK: Copy helpers
@@ -130,17 +186,51 @@ struct SystemMonitorTab: View {
 
     private func shortGB(_ bytes: Double) -> String {
         let gb = bytes / 1_073_741_824
-        if gb >= 100 { return String(format: "%.0f", gb) }
         if gb >= 10 { return String(format: "%.0f", gb) }
         if gb >= 1 { return String(format: "%.1f", gb) }
         return String(format: "%.1f", gb)
     }
 
-    /// Rest state is soft white; warn/crit only when the number actually matters.
     private func loadTint(_ v: Double, warn: Double, crit: Double) -> Color {
         if v >= crit { return Color(red: 0.95, green: 0.38, blue: 0.32) }
         if v >= warn { return Color(red: 0.98, green: 0.72, blue: 0.28) }
         return .white.opacity(0.55)
+    }
+}
+
+// MARK: - Collapsed flank
+
+/// Compact load readout flanking the camera while the notch is idle and load is elevated.
+struct CollapsedSystemLoadView: View {
+    @ObservedObject var monitor: SystemMonitorManager
+    @Default(.systemMonitorBadgeMetric) private var badgeMetric
+
+    var body: some View {
+        let load = monitor.stats.load(for: badgeMetric)
+        let color = loadColor(load)
+
+        HStack(spacing: 0) {
+            Image(systemName: "cpu")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
+                .padding(.leading, 16)
+
+            Spacer(minLength: 0)
+
+            Text("\(Int((load * 100).rounded()))%")
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .contentTransition(.numericText(value: load))
+                .padding(.trailing, 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func loadColor(_ v: Double) -> Color {
+        if v > 0.8 { return .red }
+        if v > 0.5 { return .yellow }
+        return .green
     }
 }
 
@@ -149,9 +239,10 @@ struct SystemMonitorTab: View {
 struct SystemLoadBadge: View {
     @ObservedObject var monitor: SystemMonitorManager
     let registry: ModuleRegistry
+    @Default(.systemMonitorBadgeMetric) private var badgeMetric
 
     var body: some View {
-        let load = max(monitor.stats.cpuUsage, monitor.stats.memoryPressure)
+        let load = monitor.stats.load(for: badgeMetric)
         let pct = Int((load * 100).rounded())
         let color: Color = load > 0.8 ? .red : load > 0.5 ? .yellow : .green
 

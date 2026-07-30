@@ -1,6 +1,7 @@
 import Foundation
 import IOKit.ps
-import MachO
+import Darwin
+import Defaults
 
 struct SystemStats: Equatable {
     var cpuUsage: Double
@@ -28,6 +29,34 @@ struct SystemStats: Equatable {
     }
     var diskFraction: Double { diskTotal > 0 ? diskUsed / diskTotal : 0 }
     var swapFraction: Double { swapTotal > 0 ? swapUsed / swapTotal : 0 }
+
+    /// Badge / collapsed load metric.
+    func load(for mode: SystemLoadBadgeMetric) -> Double {
+        switch mode {
+        case .max: return max(cpuUsage, memoryPressure)
+        case .cpu: return cpuUsage
+        case .memory: return memoryPressure
+        }
+    }
+}
+
+struct TopProcess: Identifiable, Equatable {
+    let pid: Int32
+    let name: String
+    let cpuFraction: Double
+    var id: Int32 { pid }
+}
+
+enum SystemLoadBadgeMetric: String, Defaults.Serializable, CaseIterable, Identifiable {
+    case max, cpu, memory
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .max: return "Max of CPU & Memory"
+        case .cpu: return "CPU"
+        case .memory: return "Memory pressure"
+        }
+    }
 }
 
 private struct SwapUsage {
@@ -49,13 +78,20 @@ final class SystemMonitorManager: ObservableObject {
         batteryLevel: nil, batteryCharging: false,
         thermalState: .nominal, gpuUsage: 0
     )
+    @Published private(set) var topProcesses: [TopProcess] = []
 
     let pCoreCount: Int
     let eCoreCount: Int
+    let logicalCPUCount: Int
 
     private var timer: Timer?
-    private var previousPerCoreTicks: [UInt32]?
-    private var previousTotalTicks: UInt32?
+    /// Per-core cumulative busy ticks (user+system+nice).
+    private var previousPerCoreBusy: [UInt32]?
+    /// Per-core cumulative total ticks (busy+idle).
+    private var previousPerCoreTotal: [UInt32]?
+    /// pid → total CPU time in ns (user+system).
+    private var previousProcessCPU: [Int32: UInt64] = [:]
+    private var previousProcessSample: Date?
 
     init() {
         var p = 0, e = 0
@@ -63,9 +99,10 @@ final class SystemMonitorManager: ObservableObject {
         if sysctlbyname("hw.perflevel0.logicalcpu", &p, &size, nil, 0) != 0 { p = 0 }
         size = MemoryLayout<Int>.size
         if sysctlbyname("hw.perflevel1.logicalcpu", &e, &size, nil, 0) != 0 { e = 0 }
-        if p + e == 0 { p = ProcessInfo.processInfo.processorCount / 2 } // fallback
+        if p + e == 0 { p = ProcessInfo.processInfo.processorCount / 2 }
         self.pCoreCount = max(p, 1)
         self.eCoreCount = max(e, 0)
+        self.logicalCPUCount = max(ProcessInfo.processInfo.processorCount, 1)
     }
 
     func start() {
@@ -112,6 +149,7 @@ final class SystemMonitorManager: ObservableObject {
             thermalState: thermal,
             gpuUsage: gpu
         )
+        topProcesses = readTopProcesses()
     }
 
     // MARK: CPU
@@ -137,9 +175,11 @@ final class SystemMonitorManager: ObservableObject {
             count: count
         )
 
-        var totalTicks: UInt32 = 0
-        var idleTicks: UInt32 = 0
         var perCoreBusy: [UInt32] = []
+        var perCoreTotal: [UInt32] = []
+        perCoreBusy.reserveCapacity(count)
+        perCoreTotal.reserveCapacity(count)
+
         for i in 0..<count {
             let cpu = loadInfo[i]
             let user = cpu.cpu_ticks.0
@@ -147,38 +187,114 @@ final class SystemMonitorManager: ObservableObject {
             let idle = cpu.cpu_ticks.2
             let nice = cpu.cpu_ticks.3
             let coreTotal = user &+ system &+ idle &+ nice
-            totalTicks = totalTicks &+ coreTotal
-            idleTicks = idleTicks &+ idle
-            perCoreBusy.append(coreTotal &- idle)
+            let coreBusy = user &+ system &+ nice
+            perCoreTotal.append(coreTotal)
+            perCoreBusy.append(coreBusy)
         }
 
-        let busyTotal = totalTicks &- idleTicks
-        guard let prevTotal = previousTotalTicks, let prevBusy = previousPerCoreTicks, prevBusy.count == count else {
-            previousTotalTicks = totalTicks
-            previousPerCoreTicks = perCoreBusy
+        guard let prevBusy = previousPerCoreBusy,
+              let prevTotal = previousPerCoreTotal,
+              prevBusy.count == count,
+              prevTotal.count == count
+        else {
+            previousPerCoreBusy = perCoreBusy
+            previousPerCoreTotal = perCoreTotal
             return (stats.cpuUsage, stats.pCoreAvg, stats.eCoreAvg)
         }
 
-        let totalDelta = Double(totalTicks &- prevTotal)
-        guard totalDelta > 0 else { return (stats.cpuUsage, stats.pCoreAvg, stats.eCoreAvg) }
-
-        let overallBusyDelta = Double(busyTotal &- prevBusy.reduce(0, +))
-        let overall = min(overallBusyDelta / totalDelta, 1)
-
-        // Per-core usage
-        let pCores = min(pCoreCount, count)
-        var pSum: Double = 0
-        var eSum: Double = 0
+        // Each core's usage = busyΔ / totalΔ for that core (not / sum of all cores).
+        var usages = [Double](repeating: 0, count: count)
+        var busySum: Double = 0
+        var totalSum: Double = 0
         for i in 0..<count {
-            let delta = Double(perCoreBusy[i] &- prevBusy[i])
-            let usage = min(delta / totalDelta, 1)
-            if i < pCores { pSum += usage } else { eSum += usage }
+            let tDelta = Double(perCoreTotal[i] &- prevTotal[i])
+            let bDelta = Double(perCoreBusy[i] &- prevBusy[i])
+            totalSum += tDelta
+            busySum += bDelta
+            usages[i] = tDelta > 0 ? min(max(bDelta / tDelta, 0), 1) : 0
         }
 
-        previousTotalTicks = totalTicks
-        previousPerCoreTicks = perCoreBusy
+        previousPerCoreBusy = perCoreBusy
+        previousPerCoreTotal = perCoreTotal
 
-        return (overall, pSum / Double(pCores), eSum / Double(max(eCoreCount, 1)))
+        let overall = totalSum > 0 ? min(max(busySum / totalSum, 0), 1) : stats.cpuUsage
+        let pCores = min(pCoreCount, count)
+        let pAvg = pCores > 0 ? usages.prefix(pCores).reduce(0, +) / Double(pCores) : 0
+        let eCount = count - pCores
+        let eAvg = eCount > 0 ? usages.suffix(eCount).reduce(0, +) / Double(eCount) : 0
+
+        return (overall, pAvg, eAvg)
+    }
+
+    // MARK: Top processes
+
+    private func readTopProcesses() -> [TopProcess] {
+        let now = Date()
+        let pids = listPIDs()
+        var current: [Int32: UInt64] = [:]
+        var names: [Int32: String] = [:]
+        current.reserveCapacity(pids.count)
+
+        for pid in pids {
+            guard let total = processCPUTime(pid) else { continue }
+            current[pid] = total
+            if let n = processName(pid) { names[pid] = n }
+        }
+
+        defer {
+            previousProcessCPU = current
+            previousProcessSample = now
+        }
+
+        guard let prevDate = previousProcessSample, !previousProcessCPU.isEmpty else {
+            return topProcesses
+        }
+
+        let elapsed = now.timeIntervalSince(prevDate)
+        guard elapsed > 0.2 else { return topProcesses }
+
+        let ncpu = Double(logicalCPUCount)
+        var ranked: [TopProcess] = []
+        ranked.reserveCapacity(16)
+
+        for (pid, total) in current {
+            guard let prev = previousProcessCPU[pid] else { continue }
+            let delta = total >= prev ? total - prev : 0
+            // Fraction of full machine capacity (all cores).
+            let fraction = min(Double(delta) / (elapsed * 1_000_000_000) / ncpu, 1)
+            guard fraction >= 0.005 else { continue }
+            let name = names[pid] ?? "pid \(pid)"
+            ranked.append(TopProcess(pid: pid, name: name, cpuFraction: fraction))
+        }
+
+        ranked.sort { $0.cpuFraction > $1.cpuFraction }
+        return Array(ranked.prefix(5))
+    }
+
+    private func listPIDs() -> [Int32] {
+        let bytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, nil, 0)
+        guard bytes > 0 else { return [] }
+        let count = Int(bytes) / MemoryLayout<Int32>.size
+        var pids = [Int32](repeating: 0, count: count)
+        let filled = proc_listpids(UInt32(PROC_ALL_PIDS), 0, &pids, Int32(bytes))
+        guard filled > 0 else { return [] }
+        let n = Int(filled) / MemoryLayout<Int32>.size
+        return pids.prefix(n).filter { $0 > 0 }
+    }
+
+    private func processCPUTime(_ pid: Int32) -> UInt64? {
+        var info = proc_taskinfo()
+        let size = Int32(MemoryLayout<proc_taskinfo>.stride)
+        let result = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, size)
+        guard result == size else { return nil }
+        return info.pti_total_user &+ info.pti_total_system
+    }
+
+    private func processName(_ pid: Int32) -> String? {
+        var buf = [CChar](repeating: 0, count: 256)
+        let n = proc_name(pid, &buf, UInt32(buf.count))
+        guard n > 0 else { return nil }
+        return String(cString: buf)
     }
 
     // MARK: Memory

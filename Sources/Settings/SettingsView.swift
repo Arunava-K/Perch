@@ -25,6 +25,9 @@ struct SettingsView: View {
             Tab("Calendar", systemImage: "calendar") {
                 CalendarPane(calendar: calendar, reminders: reminders)
             }
+            Tab("System", systemImage: "cpu") {
+                SystemMonitorPane()
+            }
             Tab("Tabs", systemImage: "square.grid.2x2") {
                 TabsPane(registry: registry)
             }
@@ -357,6 +360,60 @@ private struct CalendarPane: View {
                 Text("Reminders")
             } footer: {
                 Text("Incomplete reminders appear below events in the Calendar tab. Requires Reminders access.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+// MARK: - System monitor
+
+private struct SystemMonitorPane: View {
+    @Default(.systemMonitorCollapsedActivity) private var collapsedActivity
+    @Default(.systemMonitorCollapsedThreshold) private var collapsedThreshold
+    @Default(.systemMonitorBadgeMetric) private var badgeMetric
+    @Default(.systemMonitorShowCPU) private var showCPU
+    @Default(.systemMonitorShowMemory) private var showMemory
+    @Default(.systemMonitorShowDisk) private var showDisk
+    @Default(.systemMonitorShowGPU) private var showGPU
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Show load in collapsed notch", isOn: $collapsedActivity)
+                if collapsedActivity {
+                    LabeledContent("Threshold") {
+                        Picker("", selection: $collapsedThreshold) {
+                            Text("35%").tag(0.35)
+                            Text("50%").tag(0.5)
+                            Text("65%").tag(0.65)
+                            Text("80%").tag(0.8)
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
+                Picker("Badge metric", selection: $badgeMetric) {
+                    ForEach(SystemLoadBadgeMetric.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+            } footer: {
+                Text("When load is above the threshold and nothing else is active (timer, calendar, music), the idle notch shows a compact CPU readout.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("CPU", isOn: $showCPU)
+                Toggle("Memory", isOn: $showMemory)
+                Toggle("Disk", isOn: $showDisk)
+                Toggle("GPU", isOn: $showGPU)
+            } header: {
+                Text("Tiles")
+            } footer: {
+                Text("At least one tile should stay on. Top processes always appear under the tiles when available.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
