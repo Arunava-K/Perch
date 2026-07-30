@@ -88,15 +88,20 @@ struct ClipStripTab: View {
             Spacer(minLength: 8)
 
             if !selectedIDs.isEmpty {
+                chromeButton("Paste", systemImage: "doc.on.clipboard") {
+                    pasteSelected()
+                }
+                if PasteService.canCombine(selectedItems) {
+                    chromeButton("Combine", systemImage: "text.append") {
+                        combineSelected()
+                    }
+                }
                 chromeButton("Copy", systemImage: "doc.on.doc") {
                     ClipDragExporter.copyToPasteboard(selectedItems)
                     Haptics.tap()
                 }
                 chromeButton("Delete", systemImage: "trash", destructive: true) {
                     deleteSelected()
-                }
-                chromeButton("Clear", systemImage: "xmark") {
-                    selectedIDs.removeAll()
                 }
             } else {
                 Text("Tap · drag out")
@@ -107,10 +112,30 @@ struct ClipStripTab: View {
     }
 
     private func exitSelection() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(Motion.snappy) {
             selectionMode = false
             selectedIDs.removeAll()
         }
+    }
+
+    /// Multi-file paste into the frontmost app (great for several screenshots).
+    private func pasteSelected() {
+        let batch = selectedItems
+        guard !batch.isEmpty else { return }
+        Haptics.tap()
+        _ = PasteService.pasteItems(batch)
+        exitSelection()
+        dismiss()
+    }
+
+    /// Join text-like clips into one plain-text paste.
+    private func combineSelected() {
+        let batch = selectedItems
+        guard PasteService.canCombine(batch) else { return }
+        Haptics.tap()
+        _ = PasteService.pasteCombined(batch)
+        exitSelection()
+        dismiss()
     }
 
     /// Staggered Apple-like dismiss: cards shrink/fade, then neighbors close gaps.

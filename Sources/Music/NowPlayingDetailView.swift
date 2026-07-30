@@ -80,9 +80,7 @@ struct NowPlayingDetailView: View {
                     removal: .scale(scale: 0.96).combined(with: .opacity)
                 ))
             } else {
-                artworkSquare
-                    .frame(width: side, height: side)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                artworkSquare(side: side)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.92).combined(with: .opacity),
                         removal: .scale(scale: 0.96).combined(with: .opacity)
@@ -92,12 +90,15 @@ struct NowPlayingDetailView: View {
     }
 
     @ViewBuilder
-    private var artworkSquare: some View {
+    private func artworkSquare(side: CGFloat) -> some View {
         ZStack {
             if let art = music.artwork {
                 Image(nsImage: art)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: side, height: side, alignment: .center)
+                    .clipped()
                     .id(ObjectIdentifier(art))
                     .transition(.opacity)
             } else {
@@ -105,9 +106,13 @@ struct NowPlayingDetailView: View {
                     Color.white.opacity(0.1)
                     Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white)
                 }
+                .frame(width: side, height: side)
                 .transition(.opacity)
             }
         }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .animation(Motion.crossfade, value: music.artwork != nil)
         .animation(Motion.crossfade, value: music.title)
     }

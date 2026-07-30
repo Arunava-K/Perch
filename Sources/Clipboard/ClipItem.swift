@@ -57,4 +57,26 @@ struct ClipItem: Identifiable, Codable, Equatable {
         if let app = sourceAppName { parts.append(app) }
         return parts.joined(separator: " ")
     }
+
+    /// Plain string suitable for multi-clip Combine paste (nil for binary kinds).
+    var plainTextBody: String? {
+        switch kind {
+        case .text(let s):
+            return s
+        case .link(let url):
+            return url.absoluteString
+        case .color(let hex):
+            return hex
+        case .image:
+            // Prefer OCR text when combining screenshots into one paste.
+            if let ocrText, !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return ocrText
+            }
+            return nil
+        case .file(_, _, let name):
+            return name
+        case .locked:
+            return nil
+        }
+    }
 }

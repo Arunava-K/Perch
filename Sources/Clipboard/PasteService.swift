@@ -24,13 +24,48 @@ enum PasteService {
         let destination = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let plain = forcePlain ?? FormatRules.shouldStripFormatting(forBundleID: destination)
         ClipboardWriter.copy(item, asPlainText: plain)
+        return commitPasteboard()
+    }
 
+    /// Paste several clips at once (multi-file pasteboard — ideal for images).
+    @discardableResult
+    static func pasteItems(_ items: [ClipItem]) -> Outcome {
+        guard !items.isEmpty else { return .copiedOnly }
+        if items.count == 1 { return paste(items[0]) }
+        ClipDragExporter.copyToPasteboard(items)
+        return commitPasteboard()
+    }
+
+    /// Join text-like clips into one plain-text paste (double newlines).
+    /// Falls back to multi-file paste when nothing is text-like.
+    @discardableResult
+    static func pasteCombined(_ items: [ClipItem]) -> Outcome {
+        let parts = items.compactMap(\.plainTextBody)
+        guard parts.count >= 2 else {
+            return parts.count == 1
+                ? pasteText(parts[0])
+                : pasteItems(items)
+        }
+        return pasteText(parts.joined(separator: "\n\n"))
+    }
+
+    /// Whether Combine is useful for this selection (2+ text-like clips).
+    static func canCombine(_ items: [ClipItem]) -> Bool {
+        items.lazy.filter { $0.plainTextBody != nil }.count >= 2
+    }
+
+    private static func pasteText(_ string: String) -> Outcome {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(string, forType: .string)
+        return commitPasteboard()
+    }
+
+    private static func commitPasteboard() -> Outcome {
         guard AccessibilityPermission.isTrusted else {
             AccessibilityPermission.prompt()
             return .copiedOnly
         }
-
-        // Give the frontmost app a beat to observe the new pasteboard, then ⌘V.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             sendPasteKeystroke()
         }
