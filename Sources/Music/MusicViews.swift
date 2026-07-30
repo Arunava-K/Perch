@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 /// A small animated audio equalizer (random bar heights while playing).
 struct EqualizerView: View {
@@ -28,16 +29,28 @@ struct EqualizerView: View {
 }
 
 /// Album art tucked into the left corner and an equalizer into the right,
-/// flanking the camera while the notch is idle.
+/// flanking the camera while the notch is idle. Uses mini-vinyl when enabled.
 struct CollapsedMediaView: View {
     @ObservedObject var music: MusicManager
+    @Default(.musicVinylMode) private var vinylMode
 
     var body: some View {
         HStack(spacing: 0) {
-            artwork
-                .frame(width: 22, height: 22)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .padding(.leading, 16)
+            Group {
+                if vinylMode {
+                    MiniVinylView(
+                        artwork: music.artwork,
+                        isPlaying: music.isPlaying,
+                        accent: music.accentColor
+                    )
+                } else {
+                    artwork
+                        .frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                }
+            }
+            .padding(.leading, 16)
+            .animation(Motion.crossfade, value: vinylMode)
 
             Spacer(minLength: 0)
 

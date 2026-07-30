@@ -1,31 +1,35 @@
 import SwiftUI
+import Defaults
 
-/// The Music tab: a large square album art (filling the notch height) with
-/// title/artist, a progress bar, and transport controls.
+/// The Music tab: square cover or spinning vinyl, title/artist, progress, transport.
 struct NowPlayingDetailView: View {
     @ObservedObject var music: MusicManager
+    @Default(.musicVinylMode) private var vinylMode
 
     var body: some View {
         Group {
             if music.hasActivePlayer {
                 GeometryReader { geo in
-                    let side = geo.size.height
+                    let side = min(geo.size.height, vinylMode ? geo.size.height * 0.95 : geo.size.height)
                     HStack(spacing: 18) {
-                        artwork
+                        art(side: side)
                             .frame(width: side, height: side)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 11) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                MarqueeText(text: music.title.isEmpty ? "Not Playing" : music.title,
-                                            fontSize: 15, weight: .semibold, color: .white)
-                                MarqueeText(text: music.artist,
-                                            fontSize: 12.5, weight: .regular, color: .white.opacity(0.55))
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    MarqueeText(text: music.title.isEmpty ? "Not Playing" : music.title,
+                                                fontSize: 15, weight: .semibold, color: .white)
+                                    MarqueeText(text: music.artist,
+                                                fontSize: 12.5, weight: .regular, color: .white.opacity(0.55))
+                                }
+                                Spacer(minLength: 0)
+                                vinylToggle
                             }
                             progress
                         }
 
-                        Spacer(minLength: 14)
+                        Spacer(minLength: 10)
 
                         HStack(spacing: 22) {
                             control("backward.fill", 15) { music.previousTrack() }
@@ -41,23 +45,54 @@ struct NowPlayingDetailView: View {
                 .padding(.vertical, 6)
                 .transition(.tabContent)
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "music.note")
                         .font(.system(size: 24, weight: .light))
                         .foregroundStyle(.white.opacity(0.3))
                     Text("Nothing playing")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.4))
+                    vinylToggle
+                        .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.tabContent)
             }
         }
         .animation(Motion.content, value: music.hasActivePlayer)
+        .animation(Motion.content, value: vinylMode)
+    }
+
+    // MARK: Artwork
+
+    @ViewBuilder
+    private func art(side: CGFloat) -> some View {
+        Group {
+            if vinylMode {
+                VinylView(
+                    artwork: music.artwork,
+                    isPlaying: music.isPlaying,
+                    accent: music.accentColor,
+                    size: side
+                )
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.92).combined(with: .opacity),
+                    removal: .scale(scale: 0.96).combined(with: .opacity)
+                ))
+            } else {
+                artworkSquare
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.92).combined(with: .opacity),
+                        removal: .scale(scale: 0.96).combined(with: .opacity)
+                    ))
+            }
+        }
     }
 
     @ViewBuilder
-    private var artwork: some View {
+    private var artworkSquare: some View {
         ZStack {
             if let art = music.artwork {
                 Image(nsImage: art)
@@ -77,12 +112,32 @@ struct NowPlayingDetailView: View {
         .animation(Motion.crossfade, value: music.title)
     }
 
+    private var vinylToggle: some View {
+        Button {
+            withAnimation(Motion.snappy) {
+                vinylMode.toggle()
+            }
+            Haptics.tap()
+        } label: {
+            Image(systemName: vinylMode ? "square.grid.2x2" : "circle.circle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(.white.opacity(0.08)))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(PressableStyle(pressedScale: 0.92))
+        .help(vinylMode ? "Square cover" : "Vinyl mode")
+    }
+
+    // MARK: Progress / controls
+
     private var progress: some View {
         VStack(spacing: 6) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.16))
-                    Capsule().fill(.white.opacity(0.9))
+                    Capsule().fill(vinylMode ? music.accentColor.opacity(0.9) : .white.opacity(0.9))
                         .frame(width: max(0, geo.size.width * fraction))
                         .animation(Motion.metric, value: fraction)
                 }
@@ -115,7 +170,9 @@ struct NowPlayingDetailView: View {
         Button(action: action) {
             ZStack {
                 if prominent {
-                    Circle().fill(.white.opacity(0.14)).frame(width: 38, height: 38)
+                    Circle()
+                        .fill(vinylMode ? music.accentColor.opacity(0.22) : .white.opacity(0.14))
+                        .frame(width: 38, height: 38)
                 }
                 Image(systemName: symbol)
                     .font(.system(size: size, weight: .semibold))

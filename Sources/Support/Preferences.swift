@@ -96,6 +96,11 @@ extension Defaults.Keys {
     /// Module ids the user has hidden.
     static let disabledModules = Key<[String]>("disabledModules", default: [])
 
+    // MARK: Music
+
+    /// Music tab shows spinning vinyl artwork instead of a square cover.
+    static let musicVinylMode = Key<Bool>("musicVinylMode", default: false)
+
     // MARK: System monitor
 
     /// Show a compact load flank in the collapsed notch when load is elevated.
