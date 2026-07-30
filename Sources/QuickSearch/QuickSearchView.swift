@@ -18,7 +18,14 @@ struct QuickSearchView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var actionsShown = false
     @State private var actionSelection = 0
+    /// Keyword = FTS; Semantic = hybrid embedding rank (Library parity).
+    @State private var searchMode: SearchMode = .keyword
     @FocusState private var focused: Bool
+
+    private enum SearchMode: String, CaseIterable {
+        case keyword, semantic
+        var title: String { self == .keyword ? "Keyword" : "Semantic" }
+    }
 
     /// A palette row is either a clipboard clip or an app command.
     enum Entry: Identifiable {
@@ -71,7 +78,7 @@ struct QuickSearchView: View {
 
     // MARK: Search
 
-    /// Debounced, off-main FTS search via the shared engine.
+    /// Debounced search via the shared engine (FTS or hybrid semantic).
     private func runSearch(_ text: String, debounce: Bool) {
         searchTask?.cancel()
         searchTask = Task {
@@ -79,7 +86,13 @@ struct QuickSearchView: View {
                 try? await Task.sleep(for: .milliseconds(60))
                 if Task.isCancelled { return }
             }
-            let found = await store.search(text)
+            let found: [ClipItem]
+            if searchMode == .semantic, store.semanticSearchAvailable {
+                let q = text
+                found = await MainActor.run { Array(store.semanticResults(for: q).prefix(60)) }
+            } else {
+                found = await store.search(text)
+            }
             if Task.isCancelled { return }
             results = found
             clampSelection()
@@ -153,7 +166,7 @@ struct QuickSearchView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search clips and commands…", text: $query)
+            TextField(searchMode == .semantic ? "Semantic search…" : "Search clips and commands…", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .focused($focused)
@@ -163,6 +176,19 @@ struct QuickSearchView: View {
                 .onKeyPress(phases: .down) { press in
                     press.modifiers.contains(.command) ? handleKey(press) : .ignored
                 }
+            if store.semanticSearchAvailable {
+                Picker("", selection: $searchMode) {
+                    ForEach(SearchMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 160)
+                .onChange(of: searchMode) { _, _ in
+                    selection = 0
+                    runSearch(query, debounce: false)
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)

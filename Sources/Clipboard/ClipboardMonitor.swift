@@ -4,10 +4,18 @@ import UniformTypeIdentifiers
 
 /// Polls the general pasteboard and turns new copies into `ClipItem`s.
 @MainActor
-final class ClipboardMonitor {
+final class ClipboardMonitor: ObservableObject {
     private let store: ClipStore
     private var timer: Timer?
     private var lastChangeCount: Int
+
+    /// Sticky pause — no new clips until resumed. Survives via Defaults.
+    @Published private(set) var isPaused: Bool
+
+    /// Skip the next pasteboard change only (in-memory).
+    @Published private(set) var ignoreNextCopy = false
+
+    private var pauseObservation: Defaults.Observation?
 
     /// Pasteboard types apps use to mark content that shouldn't be recorded.
     private static let concealedTypes: Set<String> = [
@@ -18,6 +26,15 @@ final class ClipboardMonitor {
     init(store: ClipStore) {
         self.store = store
         self.lastChangeCount = NSPasteboard.general.changeCount
+        self.isPaused = Defaults[.clipboardCapturePaused]
+        pauseObservation = Defaults.observe(.clipboardCapturePaused) { [weak self] change in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                guard self.isPaused != change.newValue else { return }
+                self.isPaused = change.newValue
+                self.lastChangeCount = NSPasteboard.general.changeCount
+            }
+        }
     }
 
     func start() {
@@ -28,12 +45,30 @@ final class ClipboardMonitor {
         self.timer = timer
     }
 
+    func setPaused(_ paused: Bool) {
+        guard isPaused != paused else { return }
+        isPaused = paused
+        Defaults[.clipboardCapturePaused] = paused
+        // Advance change count so resume doesn't ingest a backlog of copies.
+        lastChangeCount = NSPasteboard.general.changeCount
+    }
+
+    func ignoreNext() {
+        ignoreNextCopy = true
+    }
+
     deinit { timer?.invalidate() }
 
     private func poll() {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastChangeCount else { return }
         lastChangeCount = pb.changeCount
+
+        if isPaused { return }
+        if ignoreNextCopy {
+            ignoreNextCopy = false
+            return
+        }
         capture(from: pb)
     }
 
@@ -42,9 +77,14 @@ final class ClipboardMonitor {
         let sensitive = types.contains { Self.concealedTypes.contains($0.rawValue) }
         if sensitive && Defaults[.skipSensitiveContent] { return }
 
+        let front = NSWorkspace.shared.frontmostApplication
+        if let bid = front?.bundleIdentifier,
+           Defaults[.ignoredCaptureApps].contains(bid) {
+            return
+        }
+
         guard let kind = classify(pb) else { return }
 
-        let front = NSWorkspace.shared.frontmostApplication
         // Keep an RTF copy of text clips so they can be pasted with formatting
         // (and stripped on demand).
         var richRTF: Data?

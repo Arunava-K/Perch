@@ -51,6 +51,12 @@ extension Defaults.Keys {
     /// Skip clips marked concealed/auto-generated (e.g. passwords) entirely.
     static let skipSensitiveContent = Key<Bool>("skipSensitiveContent", default: true)
 
+    /// Sticky pause of clipboard capture (status menu / palette).
+    static let clipboardCapturePaused = Key<Bool>("clipboardCapturePaused", default: false)
+
+    /// Bundle IDs whose copies are never recorded.
+    static let ignoredCaptureApps = Key<[String]>("ignoredCaptureApps", default: [])
+
     // MARK: Paste formatting
 
     /// Strip rich-text formatting on every paste (paste as plain text).

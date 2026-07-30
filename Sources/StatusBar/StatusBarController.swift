@@ -13,26 +13,30 @@ final class StatusBarController {
     private let onOpenLibrary: () -> Void
     private let onOpenSettings: () -> Void
     private let onClearHistory: () -> Void
+    private let monitor: ClipboardMonitor
+
+    private var pauseItem: NSMenuItem?
+    private var ignoreNextItem: NSMenuItem?
 
     init(
+        monitor: ClipboardMonitor,
         onToggleNotch: @escaping () -> Void,
         onOpenLibrary: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onClearHistory: @escaping () -> Void
     ) {
+        self.monitor = monitor
         self.onToggleNotch = onToggleNotch
         self.onOpenLibrary = onOpenLibrary
         self.onOpenSettings = onOpenSettings
         self.onClearHistory = onClearHistory
         self.menu = NSMenu()
         buildMenu()
-        // Reflect the pref now and whenever it changes (live toggle from Settings).
         observation = Defaults.observe(.hideMenuBarIcon) { [weak self] change in
             self?.applyVisibility(hidden: change.newValue)
         }
     }
 
-    /// Create or tear down the status item to match the preference.
     private func applyVisibility(hidden: Bool) {
         if hidden {
             if let statusItem {
@@ -51,6 +55,9 @@ final class StatusBarController {
     }
 
     private func buildMenu() {
+        menu.delegate = MenuDelegate.shared
+        MenuDelegate.shared.onOpen = { [weak self] in self?.refreshCaptureItems() }
+
         menu.addItem(
             withTitle: "Toggle Notch",
             action: #selector(toggleNotch),
@@ -61,6 +68,24 @@ final class StatusBarController {
             action: #selector(openLibrary),
             keyEquivalent: ""
         ).target = self
+        menu.addItem(.separator())
+
+        let pause = menu.addItem(
+            withTitle: "Pause Capture",
+            action: #selector(togglePause),
+            keyEquivalent: ""
+        )
+        pause.target = self
+        pauseItem = pause
+
+        let ignore = menu.addItem(
+            withTitle: "Ignore Next Copy",
+            action: #selector(ignoreNext),
+            keyEquivalent: ""
+        )
+        ignore.target = self
+        ignoreNextItem = ignore
+
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Settings…",
@@ -91,20 +116,27 @@ final class StatusBarController {
         ).target = self
     }
 
-    @objc private func toggleNotch() {
-        onToggleNotch()
+    private func refreshCaptureItems() {
+        pauseItem?.title = monitor.isPaused ? "Resume Capture" : "Pause Capture"
+        ignoreNextItem?.isEnabled = !monitor.isPaused
+        if monitor.ignoreNextCopy {
+            ignoreNextItem?.title = "Ignore Next Copy ✓"
+        } else {
+            ignoreNextItem?.title = "Ignore Next Copy"
+        }
     }
 
-    @objc private func openLibrary() {
-        onOpenLibrary()
+    @objc private func toggleNotch() { onToggleNotch() }
+    @objc private func openLibrary() { onOpenLibrary() }
+    @objc private func openSettings() { onOpenSettings() }
+    @objc private func clearHistory() { onClearHistory() }
+
+    @objc private func togglePause() {
+        monitor.setPaused(!monitor.isPaused)
     }
 
-    @objc private func openSettings() {
-        onOpenSettings()
-    }
-
-    @objc private func clearHistory() {
-        onClearHistory()
+    @objc private func ignoreNext() {
+        monitor.ignoreNext()
     }
 
     @objc private func checkForUpdates() {
@@ -119,4 +151,11 @@ final class StatusBarController {
     @objc private func quit() {
         NSApp.terminate(nil)
     }
+}
+
+/// Soft delegate so menu titles refresh each open without retaining the controller hard.
+private final class MenuDelegate: NSObject, NSMenuDelegate {
+    static let shared = MenuDelegate()
+    var onOpen: (() -> Void)?
+    func menuWillOpen(_ menu: NSMenu) { onOpen?() }
 }

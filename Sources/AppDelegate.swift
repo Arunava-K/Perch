@@ -176,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusBarController = StatusBarController(
+            monitor: monitor,
             onToggleNotch: { [weak notchController] in
                 notchController?.toggle()
             },
@@ -227,6 +228,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                            icon: "stop.circle",
                            keywords: ["timer", "stop", "cancel"]) { [weak timerEngine] in
                 timerEngine?.stop()
+            },
+            PaletteCommand(id: "pause-capture", title: "Pause Clipboard Capture",
+                           subtitle: "Stop recording new copies until resumed.",
+                           icon: "pause.circle",
+                           keywords: ["pause", "stop", "capture", "clipboard"]) { [weak monitor] in
+                monitor?.setPaused(true)
+            },
+            PaletteCommand(id: "resume-capture", title: "Resume Clipboard Capture",
+                           subtitle: "Start recording copies again.",
+                           icon: "play.circle",
+                           keywords: ["resume", "start", "capture", "clipboard"]) { [weak monitor] in
+                monitor?.setPaused(false)
+            },
+            PaletteCommand(id: "ignore-next", title: "Ignore Next Copy",
+                           subtitle: "Skip the next pasteboard change once.",
+                           icon: "eye.slash",
+                           keywords: ["ignore", "skip", "next", "copy", "secret"]) { [weak monitor] in
+                monitor?.ignoreNext()
             },
             PaletteCommand(id: "clear-history", title: "Clear Clipboard History",
                            subtitle: "Trash all unpinned clips.",

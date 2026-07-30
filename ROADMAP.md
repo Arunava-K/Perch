@@ -1,374 +1,247 @@
-# Mybar — Phased Development Plan
+# Perch — Product Roadmap
 
-A macOS notch clipboard manager (Supaste-style), informed by a study of
-[boring.notch](https://github.com/TheBoredTeam/boring.notch). Each phase is
-shippable on its own and ends with a concrete "done when" check.
+**Positioning:** Free, open-source macOS notch utility. Clipboard-first “superapp”
+that lives in the hardware notch — not a music toy with extras bolted on.
 
-**Legend:** 🟢 done · 🔵 next · ⚪ planned · 🟡 deferred/optional
+**License / money:** OSS + free forever. No freemium gates. Optional later:
+GitHub Sponsors / Ko-fi (community support only).
 
----
-
-## Phase 0 — Bare notch shell 🟢 DONE
-
-The animated notch window that hangs from the hardware notch, expands on hover,
-and is click-through everywhere else.
-
-- Accessory app (LSUIElement), borderless non-activating `NSPanel`.
-- `NotchShape` (square top, rounded bottom), pure-black fill that blends with the
-  hardware notch.
-- Hover via cursor **polling** (robust through a non-activating panel).
-- Window fixed at expanded size; content animates inside; custom `hitTest`
-  click-through.
-
-**Done when:** ✅ notch expands/collapses cleanly, blends with the bezel.
+**Status:** Feature-rich v0.1 — clipboard stack is deep; notch platform is solid;
+docs and distribution still lag the product.
 
 ---
 
-## Phase 1 — Window hardening & interaction polish 🟢 DONE
+## 1. Market map
 
-Bring the shell up to boring.notch's robustness before piling features on.
+### Notch “Dynamic Island” apps
 
-**Tasks**
-- Raise window level to `.mainMenu + 3`; widen styleMask to
-  `[.borderless, .nonactivatingPanel, .utilityWindow, .hudWindow]`.
-- Full `collectionBehavior`: `.canJoinAllSpaces, .fullScreenAuxiliary,
-  .stationary, .ignoresCycle`.
-- Adopt boring.notch's corner radii (closed 6/14, open 19/24) + open/close
-  spring asymmetry.
-- Add a **status-bar menu** (icon → Settings, Quit) so the app is discoverable.
-- Add **launch-at-login** (`SMAppService`).
-- Scaffold preferences with the `Defaults` library (`sindresorhus/Defaults`).
-- Add a global **toggle hotkey** via `KeyboardShortcuts` (`sindresorhus/KeyboardShortcuts`).
+| Product | Model | Strengths | Gaps vs Perch |
+|--------|--------|-----------|----------------|
+| **[Boring Notch](https://github.com/TheBoredTeam/boring.notch)** (~10k★, GPL, free/unsigned) | Music + shelf + calendar + HUD + mirror | Community, polish, mediaremote, Homebrew cask | Clipboard is not the product; no vault/OCR/semantic search |
+| **NotchNook / similar paid** | Polished paid notch UI | Design, App Store-ish install | Closed, paid, shallow clipboard |
+| **DynamicNotchKit / DIY kits** | Dev libraries | Extensibility for builders | Not end-user products |
 
-**Borrowed from boring.notch:** window/collection-behavior config, NotchShape radii.
+### Clipboard managers
 
-**Deferred here:** private CGSSpace / SkyLight (only if we ever need lock-screen).
+| Product | Model | Strengths | Gaps vs Perch |
+|--------|--------|-----------|----------------|
+| **[Maccy](https://github.com/p0deje/Maccy)** (~21k★, MIT, free + Homebrew) | Keyboard-first history | Simple, trusted, paste/search excellence | No notch UX, no shelf/live activities |
+| **Paste / PasteNow / CopyClip** | Paid / freemium | UX polish, sync (some) | Closed; not notch-native |
+| **Raycast Clipboard** | Raycast free tier | Palette UX, extensions | Requires Raycast; not ambient notch |
+| **Supaste** | Paid notch clipboard | Closest *product* inspiration | Closed, paid |
 
-**Done when:** notch shows over fullscreen apps & all Spaces, has a menu-bar
-item, launches at login, and a hotkey toggles it open/closed.
+### Adjacent utilities (feature overlap, not full competitors)
 
-*Status:* window level raised to `.mainMenu + 3` with the wider HUD/utility
-styleMask; status-bar menu (Toggle / Settings / Quit) verified; `Defaults` +
-`KeyboardShortcuts` SPM deps integrated; Settings window with launch-at-login
-(`SMAppService`), hover toggle, and a shortcut recorder; default toggle hotkey
-⌘⇧B + a manual pin-open state so the hover poll won't fight it. (Note: synthetic
-keystroke verification is blocked by the test env lacking Accessibility to inject
-keys; hotkey path is code-verified and shared with the status-bar Toggle item.)
+| Area | Examples | What users expect |
+|------|----------|-------------------|
+| System monitors | Stats, iStat Menus, Menuwhere | Live CPU/GPU/mem, top processes |
+| Focus / timers | Stretchly, Session, native Focus | Pomodoro + ambient countdown |
+| Calendar | Fantastical, Calendr | Agenda + join links |
+| Notifications | Alerter hacks, Bannerless | Replace/mirror banners |
+| Media HUDs | Background Music, custom HUDs | Volume/brightness in custom chrome |
 
----
+### What the market rewards (esp. free OSS)
 
-## Phase 2 — Clipboard engine (headless core) 🟢 DONE
-
-The data layer. No fancy UI yet — prove capture + persistence.
-
-**Tasks**
-- `ClipboardMonitor`: poll `NSPasteboard.general.changeCount` (~0.3–0.5s timer);
-  on change, read & classify content.
-- Content classification (port `Clipboard+Content.swift`): text, RTF/HTML →
-  attributed string, image (`NSImage`/PNG), file URL, web URL, color.
-- `ClipItem { id, kind, timestamp, sourceApp (bundleId/name), isPinned, isSensitive }`.
-- Capture **source app** via `NSWorkspace.frontmostApplication` at copy time.
-- **Dedup** by content hash / `identityKey` (move-to-top on repeat).
-- Persistence: JSON in `~/Library/Application Support/Mybar/` with robust,
-  per-item decoding (start simple; revisit SQLite/SwiftData at scale).
-- Images/files stored as security-scoped bookmarks or sidecar files, not inline.
-- History cap + eviction (configurable, e.g. last 200 / N days).
-- **Sensitive-content flagging** (concealed pasteboard type, password-manager
-  source apps) — store flagged, optionally skip.
-
-**Borrowed from boring.notch:** `ShelfItem`/`Bookmark` model, JSON persistence
-with robust decoding, security-scoped bookmark helpers, `Clipboard+Content`.
-
-**Done when:** copying things across apps builds a persisted, deduped history
-(verifiable via a debug dump) that survives relaunch.
-
-*Status:* `ClipboardMonitor` polls `changeCount` every 0.4s; classifies
-file/image/color/link/text (hex strings and bare URLs are upgraded to
-color/link). Items carry source app, timestamp, pin & sensitive flags. Storage:
-`~/Library/Application Support/Mybar/clips.json` (robust per-item decode) +
-content-addressed PNG blobs under `blobs/`. Count + age eviction (pinned exempt),
-concealed-type skipping. Verified end-to-end: dedup move-to-top, source-app
-capture (Figma), blob on disk, and survival across relaunch. "Clear Clipboard
-History" added to the status-bar menu.
+1. **One killer daily habit** (Maccy = paste history; Boring Notch = music in the notch).
+2. **Trust** — clear permissions, no telemetry drama, easy uninstall.
+3. **Install path** — Homebrew + (ideally) notarized DMG; quarantine docs if unsigned.
+4. **Restraint** — modules on by default only if they’re excellent; rest opt-in.
+5. **Docs that match the binary** — README/ROADMAP drift kills contributor trust.
 
 ---
 
-## Phase 3 — Notch clipboard shelf UI 🟢 DONE
+## 2. Where Perch already wins
 
-Surface the history in the expanded notch.
+Unique combination **none of the above fully ship**:
 
-**Tasks**
-- Horizontal scrolling row of recent clips inside the open notch.
-- Per-type cards: text snippet, image thumbnail, file icon+name, link favicon.
-- Thumbnails via `QLThumbnailGenerator` behind an `actor` cache.
-- Hover/selection states; keyboard arrow navigation.
-- Click a clip → copy back to pasteboard (+ visual confirmation).
-- Empty state.
-- Optional **tab system** (Clipboard / Shelf) like boring.notch.
+| Capability | Perch | Boring Notch | Maccy |
+|------------|-------|--------------|-------|
+| Notch-native clipboard strip + paste-back | ✅ | weak | ❌ |
+| SQLite history + image blobs | ✅ | — | lighter |
+| OCR + on-device semantic search | ✅ | ❌ | ❌ |
+| Vault (AES-GCM + Touch ID) | ✅ | ❌ | limited |
+| Library window + Quick Search palette | ✅ | ❌ | palette only |
+| Shelf (drag staging) | ✅ basic | ✅ stronger (AirDrop) | ❌ |
+| Music / timer / calendar / system / weather / webcam / HUD | ✅ | ✅ (music stronger) | ❌ |
+| Free + open source | ✅ | ✅ | ✅ |
 
-**Borrowed from boring.notch:** Shelf views, `ThumbnailService` actor cache,
-selection model.
-
-**Done when:** recent clips render in the notch and clicking one re-copies it.
-
-*Status:* `ClipboardShelfView` renders the live history as a horizontal strip of
-`ClipCardView`s inside the expanded notch — text snippets, image thumbnails (from
-blobs), code, color swatches (with hex), link cards (glyph + host), and file
-cards (async `QLThumbnailGenerator` via a `ThumbnailService` actor, icon
-fallback). Each card shows a type badge + source app and has hover + a "Copied"
-confirmation. Header shows item count; empty state included. Clicking copies via
-`ClipboardWriter` (verified end-to-end for text→"Another snippet…" and
-color→"#3478F6" by running the real writer). Added `FirstMouseHostingView`
-(`acceptsFirstMouse = true`) so a first click on a card acts immediately in the
-non-activating panel. (Interactive click verification via synthetic mouse events
-is blocked by the same non-activating-panel limitation as hover; render verified
-visually, copy path verified directly.)
-
-**Deferred:** keyboard arrow navigation — the panel is intentionally non-key so
-paste-back keeps the target app focused; keyboard-driven selection is better
-handled by the Phase 6 quick-search palette.
+**Thesis:** Be the **clipboard brain in the notch**, with optional live activities —
+not another music-first Boring Notch clone, and not a menu-bar-only Maccy clone.
 
 ---
 
-## Phase 4 — Paste-back, drag-out & permissions 🟢 DONE
+## 3. Strategic principles (free OSS)
 
-Make it feel like Supaste: pick a clip → it lands in the active app.
-
-**Tasks**
-- **Paste into active app**: write to pasteboard, then synthesize ⌘V via
-  `CGEvent` (needs **Accessibility** permission).
-- Onboarding step explaining/requesting Accessibility (boring.notch's
-  permission-flow pattern).
-- **Drag-out** of clips into other apps via `NSDraggingSource` + rendered SwiftUI
-  drag preview; security-scoped access started before / stopped after the drag.
-- **Drag-in** (optional): global `DragDetector` to drop files/text onto the notch.
-
-**Borrowed from boring.notch:** `NSDraggingSource` drag-out, `DragDetector`,
-onboarding/permission views.
-
-**Done when:** selecting a clip pastes it into the frontmost app; clips can be
-dragged out to Finder/other apps.
-
-*Status:* clicking a card now calls `PasteService` — copies the clip then
-simulates ⌘V via `CGEvent` when Accessibility is granted (falls back to
-copy-only + prompt otherwise; verified the copy path with the real code). The
-notch auto-dismisses after a pick. `AccessibilityPermission` helper + a first-run
-prompt + a Settings "Permissions" section drive the grant flow. Drag-OUT via
-SwiftUI `.onDrag` with per-type `NSItemProvider`s (text/link/color strings, image
-& file URLs with security scope). Drag-IN via `.onDrop` + `DropImporter` (drop
-files/images/links/text onto the notch to save them), with a dashed drop
-highlight. (Paste keystroke + drag gestures can't be driven by synthetic events
-in this env — same non-activating-panel/Accessibility limitation as before — so
-those are code-verified; the copy half is verified end-to-end.)
-
-**Deferred:** a full multi-step welcome/onboarding window → folded into Phase 7
-polish. For now: first-run prompt + Settings permissions row.
+1. **Clipboard excellence is non-negotiable.** If paste/search/history loses to Maccy, the notch chrome doesn’t matter.
+2. **Default surface stays small.** New modules default off or ear-only until proven.
+3. **Permissions are progressive.** First launch: Accessibility for paste. Everything else is Settings opt-in with plain-language “why.”
+4. **No cloud required.** On-device only unless a future optional sync is explicitly scoped (and privacy-reviewed).
+5. **Ship install friction fixes before vanity features.** Unsigned DMG is fine for early OSS *if* Homebrew + README are excellent.
+6. **Don’t chase Boring Notch feature parity.** Steal *patterns* (shelf AirDrop, mediaremote); keep product identity.
+7. **AI is optional and BYO-key** if added — never a paid cloud dependency for core features.
 
 ---
 
-## Phase 5 — Library window (full history) 🟢 DONE
+## 4. Roadmap phases
 
-A real window for browsing everything (Supaste's "Library").
-
-**Tasks**
-- Standard `NSWindow`/SwiftUI window with a searchable grid/list.
-- Full-text **search**; **filters** by type and by source app.
-- Multi-select, delete, pin/favorite, copy, QuickLook (spacebar).
-- Activation-policy flip (`.accessory ↔ .regular`) so the window can take focus.
-
-**Borrowed from boring.notch:** settings-window controller pattern, QuickLook
-service.
-
-**Done when:** a searchable/filterable window shows the whole history with
-manage actions.
-
-*Status:* `LibraryWindowController` opens a resizable "Clipboard History" window
-(activation-policy flips to `.regular` so it takes focus, back to `.accessory` on
-close), reachable from the status-bar menu. `LibraryView` shows an adaptive grid
-of `LibraryItemCell`s with live search (content + source app), a type filter, and
-a source-app filter, plus an item count. Cells show a pin badge and relative
-time; double-click copies (and closes), context menu = Copy / Pin / Quick Look /
-Delete; spacebar QuickLooks the selection (`QuickLookPreview` via `QLPreviewPanel`
-for image/file clips), delete key removes. Per-type rendering was refactored into
-a shared `ClipPreview` used by both the notch shelf and the library. Verified by
-launching the window and screenshotting (toolbar + filters + grid).
+Legend: 🔵 now · ⚪ next · 🟡 later · 🧊 icebox
 
 ---
 
-## Phase 6 — Power features 🟢 DONE
+### Phase A — Open-source launch readiness 🔵
 
-The features that make a clipboard manager sticky.
+**Goal:** A stranger can discover, install, trust, and contribute without asking you.
 
-**Tasks**
-- Global hotkeys: `⌃⌘V` quick-search palette, `⌃⌘0–9` paste last-N.
-- **Pinned/favorite** clips & custom categories.
-- **Inline shortcuts** (type `;sig` → expand saved snippet) — needs keystroke
-  monitoring (Accessibility).
-- **OCR** on image/screenshot clips (`Vision` `VNRecognizeTextRequest`) → searchable.
-- **Multi-clip** (combine several into one paste).
-- Clip **reminders** (time/app-triggered).
+| Item | Why | Done when |
+|------|-----|-----------|
+| Rewrite **README** for Perch (not Mybar / phase checklist) | First impression | Features, screenshots/GIF, install, permissions table, build from source |
+| Refresh this **ROADMAP** (this file) | Direction for contributors | Matches code |
+| **CONTRIBUTING.md** + issue/PR templates | Community hygiene | Clear “how to build” (`xcodegen` + `xcodebuild`) |
+| **LICENSE** explicit in README | OSS signal | SPDX visible |
+| **Homebrew cask** (tap or core) | Primary install for power users | `brew install --cask …` works; auto strip quarantine if possible |
+| Fix About / GitHub URLs | Trust | Points at real repo |
+| First-run **permissions explainer** (1–2 screens) | Drop-off | Accessibility explained; other perms deferred |
+| Tag **v0.2.0** release notes | Narrative | “What Perch is” not internal phase numbers |
 
-**Done when:** quick-search + numbered paste work; at least pin + OCR-search land.
-
-*Status:* **Quick-search palette** (⌃⌘V) — a Spotlight-style key window
-(`QuickSearchWindowController` remembers the frontmost app, restores it, then
-pastes the pick) with live filtering, ↑/↓ navigation, ⏎ to paste, Esc to close;
-render verified. **Numbered paste** ⌃⌘1…⌃⌘0 → paste the Nth most recent clip.
-**OCR** on image clips via Vision (`OCRService`) populates `ClipItem.ocrText`
-asynchronously and feeds `searchText`, so images are searchable — verified
-end-to-end (recognized "MYBAR OCR TEST 1234!"). **Pin** landed in Phase 5.
-
-**Deferred (optional, not required by "done when"):** inline text-expansion
-shortcuts, multi-clip combine, and clip reminders — left for post-1.0. Noted in
-Open Decisions.
+**Explicitly out of A:** Developer ID / notarization (nice, not required for OSS v0.2 if Homebrew path is solid).
 
 ---
 
-## Phase 7 — Polish & distribution 🟢 DONE
+### Phase B — Clipboard depth (beat Maccy where it matters) 🔵
 
-**Tasks**
-- Full Settings UI (history size, hotkeys, sensitive-content rules, appearance,
-  per-display behavior).
-- App icon, About, what's-new.
-- Code signing + **notarization**; auto-update via **Sparkle**.
-- Decide **sandbox vs direct** distribution (affects pasteboard/Accessibility/
-  bookmarks — see Open Decisions).
+**Goal:** Daily drivers stop keeping Maccy installed “just in case.”
 
-**Done when:** signed, notarized, auto-updating build a stranger can install.
+| Item | Why | Done when |
+|------|-----|-----------|
+| Quick Search = **keyword + semantic** (parity with Library) | Power users live in ⌃⌘V | Same ranking quality as Library |
+| **Ignore next copy** + pause capture (⌥-click menu pattern from Maccy) | Sensitive workflows | One-shot and sticky pause |
+| **Pin shortcuts** stable (optional letter hotkeys) | Muscle memory | Pinned clips reachable without hunting |
+| **Plain-text paste** variants in palette (⌥⏎) | Dev/design workflows | Documented shortcut |
+| Image **vault** (encrypt blobs or refuse lock with clear UX) | Security hole today | Locked images don’t sit cleartext |
+| Trash retention UI in Settings | Pref exists, half-exposed | User can set purge days |
+| Source-app **ignore list** | Noise control | Settings list of bundle IDs |
+| Performance pass: large histories (1k+), strip rebuild cost | Scale | No jank opening notch with fat DB |
 
-*Progress (chunk 1 done):* expanded Settings — General, **History** (keep-up-to N
-clips, discard-after N days, skip-sensitive toggle), **Shortcuts** (toggle + quick
-search recorders, paste-recent hint), Permissions, and **About** (version) — plus
-an "About Mybar" status-bar item using the standard about panel. Verified.
-
-*Chunk 2 done:* generated an **app icon** (programmatic squircle + notch + clip
-cards, full `AppIcon.appiconset`, compiled into the bundle). Integrated
-**Sparkle** auto-update (`UpdaterController`, "Check for Updates…" in the
-status-bar menu and Settings; `SUFeedURL`/`SUPublicEDKey` keys in an explicit
-`Info.plist`). Added `scripts/release.sh` (build → Developer-ID sign → notarize →
-staple → package) and `RELEASING.md` (signing, notarization, and Sparkle key/
-appcast steps). App verified launching with Sparkle bundled.
-
-*Credential caveat (Open Decision #6):* the actual **signed + notarized** artifact
-requires the user's paid Apple Developer ID and a Sparkle EdDSA key — credentials
-this autonomous environment can't hold. All code, tooling, and docs are in place;
-producing the shippable build is one `./scripts/release.sh` run with those
-credentials. Marked done on that basis.
+**Defer in B:** iCloud sync, teams/shared clipboards.
 
 ---
 
-## Live-activity track (boring.notch-inspired)
+### Phase C — Notch platform polish ⚪
 
-Pulled in to make the *collapsed* notch feel alive (not just a clipboard on hover):
+**Goal:** Feels like one product, not a pile of modules.
 
-- 🟢 **Copy sneak-peek** — on capture, the collapsed notch briefly bulges to show
-  the clip (`ClipPeekView`, generic peek mechanism in `NotchViewModel`). Verified.
-- 🟢 **Now-playing** — `MusicManager` (AppleScript polling of Apple Music/Spotify)
-  drives an idle media flank (album art + animated `EqualizerView` around the
-  camera) and a full `NowPlayingBar` (artwork, title/artist, ⏮⏸⏭) when expanded.
-  **Verified live with Spotify** (real album art via its artwork URL). Requires
-  `NSAppleEventsUsageDescription` in Info.plist (added) + the user granting the
-  one-time **Automation** permission ("Mybar wants to control Spotify/Music").
-  Sparkle's updater is now guarded so an unconfigured feed can't error on launch.
-- 🟢 **HUD replacement** (volume) — `MediaKeyTap` (CGEvent tap) intercepts the
-  volume keys, `VolumeController` adjusts via AppleScript, and a `HUDPeekView`
-  shows the level in the notch. HUD render verified; key interception needs
-  Accessibility (granted by the user) so it can't be exercised headlessly.
-
-- 🟢 **Tabbed expanded notch** — the open notch is now organized into tabs
-  (`NotchTab`: **Clipboard / Pinned / Music**) via `NotchTabBar`, instead of
-  cramming now-playing + clips onto one screen. Clipboard & Pinned share a
-  reusable `CardStripView`; Music is a full `NowPlayingDetailView` (artwork,
-  title/artist, transport, live progress bar). Cards gained a right-click
-  **Pin / Delete** menu + pin badge. The framework is extensible — adding a tab
-  is one `NotchTab` case + one branch. Verified each tab live.
-- 🟢 **UI polish pass** (Emil Kowalski design-eng principles): unified 20px
-  content margin; borderless cards; sliding tab pill (`matchedGeometryEffect`);
-  press feedback (`PressableStyle`), spring hover, staggered card entrance;
-  Music tab redesigned as an aligned mini-player (progress under title, prominent
-  play control); `MarqueeText` for long titles (Reduce-Motion aware); `blurFade`
-  enter/leave transition for notch content.
-
-Still deferred 🟡: brightness HUD, battery/charging, webcam mirror, calendar,
-swipe gestures, multi-display. (New tabs like Shelf/Calendar now slot in easily.)
+| Item | Why | Done when |
+|------|-----|-----------|
+| **Shelf v2** — AirDrop/Share, multi-select, zip, remove dead Pin | Boring Notch parity where it helps *clipboard-adjacent* flow | Drag folder of files → share/zip from notch |
+| Live-activity **priority matrix** documented + tunable | Timer vs load vs media fights | Settings: order or mute categories |
+| **Music** via MediaRemote-style path (not only AppleScript) | Reliability on modern macOS | Spotify/Music art + transport stable |
+| Brightness HUD reliability | Complete HUD story | Works on supported hardware; graceful hide otherwise |
+| Collapsed **gesture** (optional click → open last tab) | Discoverability | Documented; off by default if noisy |
+| Remove or finish dead **RemindersModule** tab path | Code honesty | One reminders story only |
+| Multi-display: correct screen / primary-notch policy | Multi-monitor users | Documented behavior; no wrong-screen panel |
 
 ---
 
-## Open decisions (revisit before Phase 2 & 7)
+### Phase D — Distribution maturity ⚪
 
-1. **Persistence**: start with JSON (simple), or go SwiftData/SQLite up front for
-   large histories + search? *Recommendation: JSON now, migrate at Phase 5 if
-   needed.*
-2. **Sandboxing / distribution**: direct (non-sandboxed) is far easier for
-   clipboard + Accessibility + global paste. App Store sandbox is restrictive.
-   *Recommendation: non-sandboxed direct distribution for v1.*
-3. **History scope**: cap by count, age, or both? Default 200 items / 30 days.
-   *Decided (Phase 2): both — 200 unpinned items AND 30-day age cap; pinned exempt.*
-4. **Rich text (RTF/HTML)**: *Decided (Phase 2): captured as plain text for now
-   (the searchable string). Raw RTF/HTML retention for faithful paste-back can be
-   added later via a sidecar blob if needed.*
-5. **Phase 6 optional features**: *Decided: inline text-expansion, multi-clip
-   combine, and clip reminders are deferred to post-1.0. The "done when" (quick
-   search, numbered paste, pin, OCR-search) is fully met without them.*
-6. **Notarization credentials (Phase 7)**: *the autonomous build env has no Apple
-   Developer ID / Sparkle key, so the actual signed+notarized artifact can't be
-   produced here. Resolution: implement everything code-side, ship full tooling
-   (`scripts/release.sh`) + docs (`RELEASING.md`); the developer runs one command
-   with their credentials to cut the release.*
+**Goal:** Install feels like a “real” Mac app without becoming paid.
+
+| Item | Why | Done when |
+|------|-----|-----------|
+| Optional **Developer ID + notarization** | Gatekeeper happiness | Still free; CI secrets documented |
+| **Sparkle** feed (or GitHub Releases updater) | Auto-update for DMG users | “Check for Updates” works |
+| Website one-pager (GitHub Pages) | Shareable link | Download + GIF + permissions |
+| Crash/log opt-in **local only** or none | Trust | No silent network |
+
+Sponsors badge in README is enough monetization for this phase.
 
 ---
 
-## Superapp roadmap (post-1.0)
+### Phase E — Selective new modules 🟡
 
-Direction: the notch becomes a **platform** — every capability is a tab (when
-open) and/or a live activity (when collapsed). The tab bar collapses unselected
-tabs to icons, so it scales to many modules.
+Only after A–C. Each module must justify notch real estate.
 
-### Done
-- 🟢 **Shelf** — drag-in file staging tray; any drag onto the notch opens it.
-  Clean file/image cards with a corner format tag.
-
-### Platform
-- 🟢 **`NotchModule` extraction** — tabs are modules in a `ModuleRegistry`; adding
-  a feature is one module class + one registry entry. Registry owns selection +
-  drop routing.
-- 🟢 **Live-activity queue** — peeks/HUDs are queued (not clobbered) with
-  coalescing (volume updates in place) and priority (HUD preempts clip peek).
-- 🟢 **Tab management** — show/hide + drag-reorder tabs in Settings; order +
-  disabled set persisted in `Defaults`.
-
-### Modules (each a tab and/or live activity)
-- ⚪ **Shelf polish** — AirDrop / Share action (`NSSharingServicePicker`),
-  multi-select, hide the no-op Pin on shelf cards, "create zip".
-- 🟢 **Timers / Pomodoro** — Timer tab (Pomodoro cycle + 5/15/25/45m quick
-  presets, pause/resume/stop/skip) with a live countdown ring + remaining time
-  flanking the camera in the collapsed notch; phase changes announced via a
-  message peek; chimes on completion.
-- 🟢 **Calendar / Up Next** — EventKit agenda tab (today's events, next meeting
-  emphasized, one-click Join for Zoom/Meet/Teams/Webex, "Open in Calendar"
-  fallback + tappable rows) + a collapsed live activity counting down to the next
-  event, with a peek reminder ~5 min before. Per-calendar show/hide in Settings.
-  **Opt-in** (`Defaults[.calendarEnabled]` + Calendar full-access grant); nothing
-  reads events until the user enables it in Settings or the in-notch prompt.
-  EventKit is confined to a `CalendarService` behind a protocol (boring.notch /
-  Calendr pattern); `CalendarManager` holds only state and is fake-service
-  testable.
-- ⚪ **AI (Claude)** — ask Claude, summarize/transform the current clip, smart
-  paste, translate (Anthropic API). The key differentiator.
-- ⚪ **Weather**, **Battery & system stats**, **Webcam mirror**,
-  **Brightness HUD** (completes the HUD set), **Stocks/crypto ticker**.
-
-### Cross-cutting
-- ⚪ Real **Apple Music artwork** (different path than Spotify's URL).
-- ⚪ **Keyboard navigation** in the open notch (arrows + return to paste).
-- ⚪ **Inline snippets / text expansion** (`;sig` → expand).
-- ⚪ **Multi-display** support (one window/ViewModel per screen, UUID-tracked).
-- ⚪ **Onboarding** flow for first-run permissions.
-- ⚪ Cut a **signed + notarized** release (needs Developer ID + Sparkle key).
+| Module | Priority | Notes |
+|--------|----------|-------|
+| **Snippets / text expansion** (`;sig`) | High | Clipboard-adjacent; Maccy doesn’t own this well |
+| **Multi-clip paste** (stack → one paste) | High | Unique power feature |
+| **Bluetooth connect peek** | Medium | Boring Notch roadmap item; low effort delight |
+| **Focus / DND status ear** | Medium | Ties to existing notification mirror |
+| Stocks/crypto ticker | Low | Noise risk; opt-in only |
+| Full notification center replacement | Low | FDA + fragile; keep mirror, don’t boil ocean |
 
 ---
 
-## Reference
+### Phase F — AI (optional, opinionated) 🟡
 
-boring.notch is cloned at `/tmp/boring.notch` for reference while building.
-See its `components/Shelf/` (closest analog) and `helpers/Clipboard+Content.swift`.
+**Do not block core on AI.**
+
+| Approach | Recommendation |
+|----------|----------------|
+| Cloud Claude/OpenAI with **user API key** | OK as opt-in module: summarize clip, rewrite tone, translate |
+| Bundled model | Heavy; skip for now |
+| “Smart paste” that needs network always | No — breaks offline/trust story |
+
+**Done when:** “Transform clip…” actions appear in Library/Quick Search context menu; key stored in Keychain; fully off when unset.
+
+---
+
+### Icebox 🧊
+
+- App Store / sandbox (fights clipboard + AX + FDA).
+- Windows/Linux.
+- Lock-screen widgets (private APIs).
+- Extension/plugin marketplace (support cost).
+- iCloud clip sync (privacy + conflict UX).
+- Inline notch keyboard nav as primary (panel is non-key by design — keep palette).
+
+---
+
+## 5. Suggested sequencing (next ~8–12 weeks)
+
+```
+Week 1–2   Phase A: README, Homebrew, CONTRIBUTING, v0.2 story
+Week 2–5   Phase B: Quick Search semantic, pause capture, vault images, ignore apps
+Week 5–8   Phase C: Shelf v2, music reliability, activity priorities
+Week 8–10  Phase D: notarize if keys available; Sparkle or GH updater
+Week 10+   Phase E snippets + multi-clip; AI only if demand shows up in issues
+```
+
+**Near-term “start Monday” list (concrete):**
+
+1. README + screenshots/GIF for current Perch.
+2. Homebrew cask in a tap.
+3. Quick Search semantic parity with Library.
+4. Pause / ignore-next-copy.
+5. Shelf Share + zip; kill no-op pin.
+6. Image vault policy.
+
+---
+
+## 6. Success metrics (OSS-appropriate)
+
+Not MRR. Track:
+
+| Signal | Healthy |
+|--------|---------|
+| GitHub stars / unique clones | Steady growth after README + brew |
+| `brew` install count (if available) | Non-zero weekly |
+| Issue quality | Repros > “add crypto” drive-bys |
+| Permission drop-off (anecdotal) | Users report paste-back works first session |
+| “Uninstalled Maccy” comments | Occasional = clipboard thesis working |
+| Contributor PRs | Even small docs/fix PRs |
+
+---
+
+## 7. Competitive posture (one paragraph)
+
+**Boring Notch** owns playful media-notch mindshare; **Maccy** owns trusted free clipboard. **Perch** should own *clipboard + ambient Mac context in the notch* — history, paste, vault, and search as the core loop; music/timer/calendar/system as opt-in live activities. Stay free and open; win on depth and taste, not on feature-count races or paid gates.
+
+---
+
+## 8. Reference links
+
+- [Boring Notch](https://github.com/TheBoredTeam/boring.notch)
+- [Maccy](https://github.com/p0deje/Maccy)
+- [Supaste](https://www.supaste.com/) (paid inspiration)
+- Internal: `AGENTS.md` (engineering constraints), `RELEASING.md` (ship process)

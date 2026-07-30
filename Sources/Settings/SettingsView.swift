@@ -83,9 +83,12 @@ private struct GeneralPane: View {
 private struct ClipboardPane: View {
     @Default(.historyLimit) private var historyLimit
     @Default(.historyMaxAgeDays) private var historyMaxAgeDays
+    @Default(.trashRetentionDays) private var trashRetentionDays
     @Default(.skipSensitiveContent) private var skipSensitiveContent
     @Default(.stripFormattingByDefault) private var stripFormattingByDefault
     @Default(.plainTextApps) private var plainTextApps
+    @Default(.ignoredCaptureApps) private var ignoredCaptureApps
+    @Default(.clipboardCapturePaused) private var capturePaused
 
     @State private var accessibilityGranted = AccessibilityPermission.isTrusted
 
@@ -98,7 +101,11 @@ private struct ClipboardPane: View {
                 Stepper(value: $historyMaxAgeDays, in: 1...365, step: 1) {
                     LabeledContent("Discard after", value: "\(historyMaxAgeDays) days")
                 }
+                Stepper(value: $trashRetentionDays, in: 1...365, step: 1) {
+                    LabeledContent("Empty trash after", value: "\(trashRetentionDays) days")
+                }
                 Toggle("Skip passwords & sensitive content", isOn: $skipSensitiveContent)
+                Toggle("Pause clipboard capture", isOn: $capturePaused)
             }
 
             Section {
@@ -121,6 +128,29 @@ private struct ClipboardPane: View {
                 Text("Formatting")
             } footer: {
                 Text("Clips paste with their original formatting. Apps listed here always receive plain text.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                ForEach(ignoredCaptureApps, id: \.self) { bundleID in
+                    HStack {
+                        Image(systemName: "app.dashed").foregroundStyle(.secondary)
+                        Text(SettingsFormatHelpers.appName(for: bundleID))
+                        Spacer()
+                        Button {
+                            ignoredCaptureApps.removeAll { $0 == bundleID }
+                        } label: {
+                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button("Ignore App…", action: addIgnoredCaptureApp)
+            } header: {
+                Text("Ignore apps")
+            } footer: {
+                Text("Copies from these apps are never saved to history.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -164,6 +194,17 @@ private struct ClipboardPane: View {
         guard panel.runModal() == .OK, let url = panel.url,
               let id = Bundle(url: url)?.bundleIdentifier else { return }
         if !plainTextApps.contains(id) { plainTextApps.append(id) }
+    }
+
+    private func addIgnoredCaptureApp() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let id = Bundle(url: url)?.bundleIdentifier else { return }
+        if !ignoredCaptureApps.contains(id) { ignoredCaptureApps.append(id) }
     }
 }
 
@@ -482,7 +523,7 @@ private struct AboutPane: View {
                     UpdaterController.shared.checkForUpdates()
                 }
                 Link("github.com/Arunava-K/Perch",
-                     destination: URL(string: "https://github.com")!)
+                     destination: URL(string: "https://github.com/Arunava-K/Perch")!)
             }
         }
     }

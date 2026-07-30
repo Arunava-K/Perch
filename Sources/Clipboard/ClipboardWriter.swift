@@ -24,8 +24,7 @@ enum ClipboardWriter {
             pb.setString(hex, forType: .string)
 
         case .image(let blobFile, _, _, _):
-            let url = BlobStore.shared.url(for: blobFile)
-            if let data = try? Data(contentsOf: url) {
+            if let data = BlobStore.shared.pngData(for: blobFile) {
                 pb.setData(data, forType: .png)
             }
 

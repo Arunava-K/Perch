@@ -1,12 +1,14 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A single clip rendered as a tappable card. Click pastes into the active app
 /// (or copies if Accessibility isn't granted); drag carries it to other apps.
 struct ClipCardView: View {
     let item: ClipItem
     var onPick: () -> Void = {}
-    var onTogglePin: () -> Void = {}
+    var onTogglePin: (() -> Void)? = nil
     var onDelete: () -> Void = {}
+    var onShare: (() -> Void)? = nil
 
     @State private var confirm = false
     @State private var confirmLabel = "Copied"
@@ -39,8 +41,13 @@ struct ClipCardView: View {
         .onDrag { makeItemProvider() }
         .help(tooltip)
         .contextMenu {
-            Button(item.isPinned ? "Unpin" : "Pin",
-                   systemImage: item.isPinned ? "pin.slash" : "pin", action: onTogglePin)
+            if let onTogglePin {
+                Button(item.isPinned ? "Unpin" : "Pin",
+                       systemImage: item.isPinned ? "pin.slash" : "pin", action: onTogglePin)
+            }
+            if let onShare {
+                Button("Share…", systemImage: "square.and.arrow.up", action: onShare)
+            }
             Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
         }
     }
@@ -228,6 +235,9 @@ struct ClipCardView: View {
         case .link(let url):
             return NSItemProvider(object: url as NSURL)
         case .image(let blobFile, _, _, _):
+            if let data = BlobStore.shared.pngData(for: blobFile) {
+                return NSItemProvider(item: data as NSData, typeIdentifier: UTType.png.identifier)
+            }
             let url = BlobStore.shared.url(for: blobFile)
             return NSItemProvider(contentsOf: url) ?? NSItemProvider()
         case .file(let bookmark, let path, _):

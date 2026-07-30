@@ -42,7 +42,41 @@ final class BlobStore {
 
     func url(for file: String) -> URL { directory.appendingPathComponent(file) }
 
+    func isVaultFile(_ file: String) -> Bool { file.hasSuffix(".vault") }
+
+    /// Session-only plaintext for vault blobs after Touch ID reveal.
+    private var sessionDecrypted: [String: Data] = [:]
+
+    func cacheDecrypted(_ data: Data, for file: String) {
+        sessionDecrypted[file] = data
+    }
+
+    func clearDecrypted(for file: String) {
+        sessionDecrypted.removeValue(forKey: file)
+    }
+
+    /// PNG bytes for a blob: plain file on disk, or session-decrypted vault data.
+    func pngData(for file: String) -> Data? {
+        if let cached = sessionDecrypted[file] { return cached }
+        guard !isVaultFile(file) else { return nil }
+        return try? Data(contentsOf: url(for: file))
+    }
+
+    /// Write AES-GCM sealed image bytes as a vault sidecar.
+    func saveVault(_ sealed: Data, hash: String) -> String? {
+        let file = "\(hash).vault"
+        let dest = directory.appendingPathComponent(file)
+        do {
+            try sealed.write(to: dest, options: .atomic)
+            return file
+        } catch {
+            NSLog("Perch: could not save vault blob: \(error)")
+            return nil
+        }
+    }
+
     func delete(file: String) {
+        clearDecrypted(for: file)
         try? FileManager.default.removeItem(at: url(for: file))
     }
 

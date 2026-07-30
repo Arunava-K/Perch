@@ -88,8 +88,15 @@ struct ImageThumbnail: View {
             }
         }
         .task(id: blobFile) {
-            let url = BlobStore.shared.url(for: blobFile)
-            image = await ThumbnailService.shared.imageThumbnail(at: url, maxPixel: maxPixel)
+            if let data = BlobStore.shared.pngData(for: blobFile),
+               let ns = NSImage(data: data) {
+                image = ns
+            } else if !BlobStore.shared.isVaultFile(blobFile) {
+                let url = BlobStore.shared.url(for: blobFile)
+                image = await ThumbnailService.shared.imageThumbnail(at: url, maxPixel: maxPixel)
+            } else {
+                image = nil
+            }
         }
     }
 }

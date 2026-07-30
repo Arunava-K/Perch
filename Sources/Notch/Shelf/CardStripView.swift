@@ -6,8 +6,10 @@ struct CardStripView: View {
     var emptyTitle: String = "No clips yet"
     var emptySymbol: String = "tray"
     var onPick: (ClipItem) -> Void
-    var onTogglePin: (ClipItem) -> Void = { _ in }
+    var onTogglePin: ((ClipItem) -> Void)? = nil
     var onDelete: (ClipItem) -> Void = { _ in }
+    var onShare: ((ClipItem) -> Void)? = nil
+    var showsPin: Bool = true
 
     var body: some View {
         if items.isEmpty {
@@ -27,8 +29,9 @@ struct CardStripView: View {
                         ClipCardView(
                             item: item,
                             onPick: { onPick(item) },
-                            onTogglePin: { onTogglePin(item) },
-                            onDelete: { onDelete(item) }
+                            onTogglePin: showsPin ? { onTogglePin?(item) } : nil,
+                            onDelete: { onDelete(item) },
+                            onShare: onShare.map { handler in { handler(item) } }
                         )
                         .staggeredAppear(index)
                     }

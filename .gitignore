@@ -11,8 +11,5 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 
-# Working doc, kept out of version control for now
-README.md
-
 # Agent / session data
 .claude/

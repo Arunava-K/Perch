@@ -258,21 +258,30 @@ final class ClipStore: ObservableObject {
 
     func isRevealed(_ id: UUID) -> Bool { revealedIDs.contains(id) }
 
-    /// Can this clip be locked? Images are excluded for now (their blob lives
-    /// unencrypted on disk); already-locked clips obviously can't re-lock.
+    /// Can this clip be locked? Already-locked clips can't re-lock.
     func canLock(_ item: ClipItem) -> Bool {
         if item.isLocked { return false }
-        switch item.kind {
-        case .image, .locked: return false
-        default: return true
-        }
+        if case .locked = item.kind { return false }
+        return true
     }
 
-    /// Encrypt a clip at rest (prompts Touch ID to access the vault key).
+    /// Encrypt a clip at rest (prompts Touch ID). Image blobs are sealed on disk
+    /// as `.vault` sidecars so plaintext PNGs are not left behind.
     func lock(_ id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }), canLock(items[idx]) else { return }
-        let realKind = items[idx].kind
+        var realKind = items[idx].kind
         do {
+            // Seal image bytes first; rewrite kind to point at the vault file.
+            if case .image(let file, let hash, let w, let h) = realKind {
+                guard let plain = BlobStore.shared.pngData(for: file)
+                        ?? (try? Data(contentsOf: BlobStore.shared.url(for: file))) else { return }
+                let sealedBlob = try ClipCrypto.seal(plain, reason: "Lock this clip in Perch")
+                guard let vaultFile = BlobStore.shared.saveVault(sealedBlob, hash: hash) else { return }
+                if file != vaultFile { BlobStore.shared.delete(file: file) }
+                BlobStore.shared.clearDecrypted(for: file)
+                realKind = .image(blobFile: vaultFile, contentHash: hash, pixelWidth: w, pixelHeight: h)
+            }
+
             let json = try JSONEncoder().encode(realKind)
             let sealed = try ClipCrypto.seal(json, reason: "Lock this clip in Perch")
             let lockedKind = ClipKind.locked(type: realKind.typeName)
@@ -280,7 +289,6 @@ final class ClipStore: ObservableObject {
             items[idx].kind = lockedKind
             items[idx].isLocked = true
             revealedIDs.remove(id)
-            // Locked content must not be semantically searchable.
             dropEmbedding(for: id)
         } catch {
             NSLog("Perch: lock failed — \(error)")
@@ -295,7 +303,13 @@ final class ClipStore: ObservableObject {
               let sealed = repo.sealedPayload(id: id) else { return false }
         do {
             let data = try ClipCrypto.open(sealed, reason: "Unlock this clip")
-            items[idx].kind = try JSONDecoder().decode(ClipKind.self, from: data)
+            let kind = try JSONDecoder().decode(ClipKind.self, from: data)
+            if case .image(let file, _, _, _) = kind, BlobStore.shared.isVaultFile(file) {
+                let sealedBlob = try Data(contentsOf: BlobStore.shared.url(for: file))
+                let plain = try ClipCrypto.open(sealedBlob, reason: "Unlock this clip")
+                BlobStore.shared.cacheDecrypted(plain, for: file)
+            }
+            items[idx].kind = kind
             revealedIDs.insert(id)
             return true
         } catch {
@@ -304,11 +318,20 @@ final class ClipStore: ObservableObject {
         }
     }
 
-    /// Permanently remove protection, decrypting first if needed.
+    /// Permanently remove protection, decrypting first if needed. Restores a
+    /// plaintext PNG when the sealed kind pointed at a vault blob.
     func removeLock(_ id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }), items[idx].isLocked else { return }
         if !revealedIDs.contains(id), !reveal(id) { return }
-        let realKind = items[idx].kind  // now decrypted in memory
+        var realKind = items[idx].kind
+        if case .image(let file, let hash, let w, let h) = realKind, BlobStore.shared.isVaultFile(file) {
+            if let plain = BlobStore.shared.pngData(for: file),
+               let saved = BlobStore.shared.savePNG(plain) {
+                BlobStore.shared.delete(file: file)
+                realKind = .image(blobFile: saved.file, contentHash: saved.hash, pixelWidth: w, pixelHeight: h)
+                items[idx].kind = realKind
+            }
+        }
         let searchText = items[idx].searchText
         guard repo.removeLock(id: id, kind: realKind, searchText: searchText) else { return }
         items[idx].isLocked = false
