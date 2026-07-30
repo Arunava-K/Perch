@@ -1,44 +1,54 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 
-/// A single clip rendered as a tappable card. Click pastes into the active app
-/// (or copies if Accessibility isn't granted); drag carries it to other apps.
+/// A single clip card. Click pastes (or toggles selection); hold enters
+/// multi-select; drag exports one or many clips as files for drop targets.
 struct ClipCardView: View {
     let item: ClipItem
+    var isSelected: Bool = false
+    var selectionMode: Bool = false
     var onPick: () -> Void = {}
+    var onLongPress: (() -> Void)? = nil
     var onTogglePin: (() -> Void)? = nil
     var onDelete: () -> Void = {}
     var onShare: (() -> Void)? = nil
+    var dragItems: () -> [ClipItem] = { [] }
 
     @State private var confirm = false
     @State private var confirmLabel = "Copied"
     @State private var hovering = false
+    @State private var pressing = false
 
     private let cardSize = CGSize(width: 132, height: 118)
     private let radius: CGFloat = 13
     private let footerHeight: CGFloat = 26
 
     var body: some View {
-        Button(action: activate) {
-            VStack(spacing: 0) {
-                preview
-                    .frame(width: cardSize.width,
-                           height: hasFooter ? cardSize.height - footerHeight : cardSize.height)
-                    .clipped()
-                if hasFooter { footer }
-            }
-            .frame(width: cardSize.width, height: cardSize.height)
-            .background(Color.white.opacity(hovering ? 0.11 : 0.06))
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(alignment: .topLeading) { pinBadge }
-            .overlay(alignment: .topTrailing) { formatTag }
-            .overlay { confirmOverlay }
-            .scaleEffect(hovering ? 1.03 : 1)
-            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: hovering)
+        ZStack {
+            cardChrome
+            // AppKit owns click / long-press / drag — SwiftUI gestures fight the
+            // non-activating notch panel and each other.
+            CardInteractionView(
+                onClick: activate,
+                onLongPress: {
+                    guard !selectionMode else { return }
+                    onLongPress?()
+                },
+                onDrag: { event in
+                    let batch = dragItems()
+                    let items = batch.isEmpty ? [item] : batch
+                    ClipDragExporter.beginDragging(items: items, event: event)
+                },
+                onPressingChanged: { pressing = $0 }
+            )
         }
-        .buttonStyle(PressableStyle(pressedScale: 0.96))
+        .frame(width: cardSize.width, height: cardSize.height)
+        .scaleEffect(pressing ? 0.96 : (hovering && !selectionMode ? 1.03 : 1))
+        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: hovering)
+        .animation(.easeOut(duration: 0.12), value: pressing)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
         .onHover { hovering = $0 }
-        .onDrag { makeItemProvider() }
         .help(tooltip)
         .contextMenu {
             if let onTogglePin {
@@ -52,7 +62,33 @@ struct ClipCardView: View {
         }
     }
 
-    // MARK: Preview (type-specific top region)
+    private var cardChrome: some View {
+        VStack(spacing: 0) {
+            preview
+                .frame(width: cardSize.width,
+                       height: hasFooter ? cardSize.height - footerHeight : cardSize.height)
+                .clipped()
+            if hasFooter { footer }
+        }
+        .frame(width: cardSize.width, height: cardSize.height)
+        .background(Color.white.opacity(backgroundOpacity))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(isSelected ? Color.accentColor.opacity(0.95) : .clear, lineWidth: 2)
+        }
+        .overlay(alignment: .topLeading) { leadingBadge }
+        .overlay(alignment: .topTrailing) { formatTag }
+        .overlay { confirmOverlay }
+    }
+
+    private var backgroundOpacity: Double {
+        if isSelected { return 0.18 }
+        if pressing { return 0.14 }
+        return hovering ? 0.11 : 0.06
+    }
+
+    // MARK: Preview
 
     @ViewBuilder
     private var preview: some View {
@@ -111,8 +147,6 @@ struct ClipCardView: View {
         }
     }
 
-    /// Visual clips (files & images) fill the card with a corner tag; the rest
-    /// keep their source-app footer.
     private var hasFooter: Bool {
         switch item.kind {
         case .file, .image: return false
@@ -120,13 +154,12 @@ struct ClipCardView: View {
         }
     }
 
-    /// Filename surfaced on hover (files only) since the name block is gone.
     private var tooltip: String {
         if case .file(_, _, let name) = item.kind { return name }
-        return ""
+        if selectionMode { return isSelected ? "Selected — drag to drop" : "Click to select" }
+        return "Click to paste · Hold to multi-select · Drag to drop"
     }
 
-    /// Corner badge: extension for files, pixel size for images.
     @ViewBuilder
     private var formatTag: some View {
         if let label = tagLabel {
@@ -147,14 +180,11 @@ struct ClipCardView: View {
             let ext = (path as NSString).pathExtension.uppercased()
             return ext.isEmpty ? "FILE" : ext
         case .image:
-            // Captured image data is stored as PNG.
             return "PNG"
         default:
             return nil
         }
     }
-
-    // MARK: Footer
 
     private var footer: some View {
         HStack(spacing: 5) {
@@ -185,8 +215,15 @@ struct ClipCardView: View {
     }
 
     @ViewBuilder
-    private var pinBadge: some View {
-        if item.isPinned {
+    private var leadingBadge: some View {
+        if selectionMode {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 14, weight: .semibold))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(isSelected ? Color.accentColor : .white.opacity(0.45),
+                                 isSelected ? .white : .white.opacity(0.2))
+                .padding(6)
+        } else if item.isPinned {
             Image(systemName: "pin.fill")
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundStyle(.yellow)
@@ -209,12 +246,15 @@ struct ClipCardView: View {
                 .foregroundStyle(.white)
             }
             .transition(.opacity)
+            .allowsHitTesting(false)
         }
     }
 
-    // MARK: Actions
-
     private func activate() {
+        if selectionMode {
+            onPick()
+            return
+        }
         let outcome = PasteService.paste(item)
         Haptics.tap()
         confirmLabel = outcome == .pasted ? "Pasted" : "Copied"
@@ -225,32 +265,110 @@ struct ClipCardView: View {
             withAnimation(.easeIn(duration: 0.2)) { confirm = false }
         }
     }
+}
 
-    private func makeItemProvider() -> NSItemProvider {
-        switch item.kind {
-        case .text(let string):
-            return NSItemProvider(object: string as NSString)
-        case .color(let hex):
-            return NSItemProvider(object: hex as NSString)
-        case .link(let url):
-            return NSItemProvider(object: url as NSURL)
-        case .image(let blobFile, _, _, _):
-            if let data = BlobStore.shared.pngData(for: blobFile) {
-                return NSItemProvider(item: data as NSData, typeIdentifier: UTType.png.identifier)
+// MARK: - AppKit interaction (click / hold / drag)
+
+/// Owns mouse events so long-press and multi-drag work inside the non-activating
+/// notch panel (SwiftUI Button + gestures are unreliable there).
+private struct CardInteractionView: NSViewRepresentable {
+    var onClick: () -> Void
+    var onLongPress: () -> Void
+    var onDrag: (NSEvent) -> Void
+    var onPressingChanged: (Bool) -> Void
+
+    func makeNSView(context: Context) -> CardHitView {
+        let view = CardHitView()
+        view.onClick = onClick
+        view.onLongPress = onLongPress
+        view.onDrag = onDrag
+        view.onPressingChanged = onPressingChanged
+        return view
+    }
+
+    func updateNSView(_ nsView: CardHitView, context: Context) {
+        nsView.onClick = onClick
+        nsView.onLongPress = onLongPress
+        nsView.onDrag = onDrag
+        nsView.onPressingChanged = onPressingChanged
+    }
+}
+
+private final class CardHitView: NSView {
+    var onClick: (() -> Void)?
+    var onLongPress: (() -> Void)?
+    var onDrag: ((NSEvent) -> Void)?
+    var onPressingChanged: ((Bool) -> Void)?
+
+    private var mouseDownEvent: NSEvent?
+    private var longPressTimer: Timer?
+    private var didLongPress = false
+    private var didDrag = false
+    private let dragThreshold: CGFloat = 5
+    private let longPressDuration: TimeInterval = 0.4
+
+    override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var acceptsFirstResponder: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(point) ? self : nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        mouseDownEvent = event
+        didLongPress = false
+        didDrag = false
+        onPressingChanged?(true)
+        longPressTimer?.invalidate()
+        longPressTimer = Timer.scheduledTimer(withTimeInterval: longPressDuration, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.mouseDownEvent != nil, !self.didDrag else { return }
+                self.didLongPress = true
+                self.onPressingChanged?(false)
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                self.onLongPress?()
             }
-            let url = BlobStore.shared.url(for: blobFile)
-            return NSItemProvider(contentsOf: url) ?? NSItemProvider()
-        case .file(let bookmark, let path, _):
-            var stale = false
-            if let url = try? URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope],
-                                  relativeTo: nil, bookmarkDataIsStale: &stale) {
-                _ = url.startAccessingSecurityScopedResource()
-                return NSItemProvider(contentsOf: url) ?? NSItemProvider(object: path as NSString)
-            }
-            return NSItemProvider(object: path as NSString)
-        case .locked:
-            // Sealed content can't leave the app without being revealed.
-            return NSItemProvider()
         }
+        RunLoop.main.add(longPressTimer!, forMode: .common)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let down = mouseDownEvent, !didDrag else { return }
+        let a = down.locationInWindow
+        let b = event.locationInWindow
+        let dist = hypot(a.x - b.x, a.y - b.y)
+        guard dist >= dragThreshold else { return }
+
+        // Movement cancels long-press and starts a drag.
+        longPressTimer?.invalidate()
+        longPressTimer = nil
+        didDrag = true
+        onPressingChanged?(false)
+        onDrag?(down)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        longPressTimer?.invalidate()
+        longPressTimer = nil
+        onPressingChanged?(false)
+        defer {
+            mouseDownEvent = nil
+            didLongPress = false
+            didDrag = false
+        }
+        // Click only if we neither long-pressed nor dragged.
+        if !didLongPress && !didDrag {
+            onClick?()
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        // Keep tracking; drag may continue outside.
+    }
+
+    deinit {
+        longPressTimer?.invalidate()
     }
 }

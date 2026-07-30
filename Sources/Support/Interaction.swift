@@ -60,4 +60,38 @@ extension AnyTransition {
             identity: BlurFadeModifier(blur: 0, opacity: 1, scale: 1)
         )
     }
+
+    /// Apple-like card dismiss: shrink slightly, fade, soft blur — never scale(0).
+    static var cardDelete: AnyTransition {
+        .asymmetric(
+            insertion: .modifier(
+                active: CardDeleteModifier(blur: 4, opacity: 0, scale: 0.94, offsetY: 6),
+                identity: CardDeleteModifier(blur: 0, opacity: 1, scale: 1, offsetY: 0)
+            ),
+            removal: .modifier(
+                active: CardDeleteModifier(blur: 6, opacity: 0, scale: 0.82, offsetY: 10),
+                identity: CardDeleteModifier(blur: 0, opacity: 1, scale: 1, offsetY: 0)
+            )
+        )
+    }
+}
+
+/// Spring used when removing clip cards so neighbors slide into place.
+enum ClipStripAnimation {
+    static let delete = Animation.spring(response: 0.34, dampingFraction: 0.84)
+}
+
+private struct CardDeleteModifier: ViewModifier {
+    let blur: CGFloat
+    let opacity: Double
+    let scale: CGFloat
+    let offsetY: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: blur)
+            .opacity(opacity)
+            .scaleEffect(scale, anchor: .center)
+            .offset(y: offsetY)
+    }
 }
