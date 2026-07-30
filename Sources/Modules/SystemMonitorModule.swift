@@ -10,18 +10,18 @@ final class SystemMonitorModule: NotchModule {
     init(monitor: SystemMonitorManager) { self.monitor = monitor }
 
     var icon: String {
-        let avg = (monitor.stats.cpuUsage + monitor.stats.memoryFraction) / 2
-        if avg < 0.35 { return "chart.bar.fill" }
-        if avg < 0.65 { return "chart.bar" }
+        let load = max(monitor.stats.cpuUsage, monitor.stats.memoryPressure)
+        if load < 0.35 { return "chart.bar.fill" }
+        if load < 0.65 { return "chart.bar" }
         return "chart.bar.doc.horizontal.fill"
     }
 
     var indicator: Bool { true }
 
     var indicatorColor: Color? {
-        let avg = (monitor.stats.cpuUsage + monitor.stats.memoryFraction) / 2
-        if avg > 0.8 { return .red }
-        if avg > 0.5 { return .yellow }
+        let load = max(monitor.stats.cpuUsage, monitor.stats.memoryPressure)
+        if load > 0.8 { return .red }
+        if load > 0.5 { return .yellow }
         return .green
     }
 

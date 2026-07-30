@@ -29,7 +29,17 @@
 
 ## Release
 
-- Releases require Developer ID signing, notarization, and Sparkle credentials. Follow `RELEASING.md`; the command is `DEV_ID="Developer ID Application: Your Name (TEAMID)" ./scripts/release.sh`.
-- `scripts/release.sh` builds `generic/platform=macOS` (arm64 + x86_64), enables hardened runtime, notarizes, staples, and fails if Sparkle feed/key are still placeholders unless `ALLOW_UNCONFIGURED_SPARKLE=1`.
-- Do not treat the placeholder `SUFeedURL` or empty `SUPublicEDKey` in `project.yml` as production-ready; configure them before enabling Sparkle updates.
-- SPM package versions are pinned with `exactVersion` in `project.yml`.
+- Releases are **unsigned DMG** distributed via GitHub Actions (no Developer ID or Sparkle needed).
+- Workflow: tag `v*` → push → `.github/workflows/release.yml` builds universal binary, packages `Perch.dmg`, publishes release.
+- Users bypass Gatekeeper with `xattr -dr com.apple.quarantine /Applications/Perch.app`.
+- `scripts/release.sh` builds locally with `CODE_SIGNING_ALLOWED=NO` and packages `.dmg`.
+- `project.yml`: hardened runtime off for Release, CODE_SIGN_STYLE Manual, CODE_SIGN_IDENTITY "Perch Dev", sparkle stubs dormant.
+- SPM package versions are pinned with `exactVersion` in `project.yml`. If `Defaults` >= 9.0.7 starts requiring Swift tools 6.2, pin to 9.0.6 until the CI runner's Xcode catches up.
+
+## System Monitor Module
+
+- `SystemMonitorManager` polls per-core CPU (P/E split via Mach host_processor_info + sysctl perflevel), memory breakdown (wired/active/compressed/inactive/free via vm_statistics64), GPU (AGXAccelerator IOKit), swap (vm.swapusage), thermal state (ProcessInfo), disk, battery every 2s.
+- `SystemMonitorTab` is four Control Center–style tiles (CPU, Memory, Disk, GPU): large value, quiet detail line, hairline progress. Soft white at rest; yellow/red only under load. No battery row.
+- CPU detail shows P/E %; GPU detail shows thermal state (Cool/Warm/Hot).
+- Load badge / module indicator use `max(cpuUsage, memoryPressure)`.
+- `SystemMonitorModule` sets `hiddenFromTabBar: true`; ear layout: WeatherBadge → webcam → SystemLoadBadge → settings.

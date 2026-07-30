@@ -1,166 +1,146 @@
 import SwiftUI
 
+/// Control Center–style system monitor: equal metric tiles, monochrome tracks,
+/// color only under load. No rainbow charts, no empty dual cards.
 struct SystemMonitorTab: View {
     @ObservedObject var monitor: SystemMonitorManager
 
     var body: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                cpuGauge
-                gauge(value: monitor.stats.memoryFraction, label: "Memory",
-                      color: memColor(monitor.stats.memoryFraction))
-                gauge(value: monitor.stats.diskFraction, label: "Disk",
-                      color: diskColor(monitor.stats.diskFraction))
-            }
-            .padding(.horizontal, 20)
-
-            if let level = monitor.stats.batteryLevel {
-                batteryRow(level: level, charging: monitor.stats.batteryCharging)
-                    .padding(.horizontal, 20)
+            HStack(spacing: 8) {
+                metricTile(
+                    title: "CPU",
+                    value: "\(pct(monitor.stats.cpuUsage))",
+                    unit: "%",
+                    detail: cpuDetail,
+                    fraction: monitor.stats.cpuUsage,
+                    tint: loadTint(monitor.stats.cpuUsage, warn: 0.55, crit: 0.85)
+                )
+                metricTile(
+                    title: "Memory",
+                    value: shortGB(monitor.stats.memoryUsed),
+                    unit: "GB",
+                    detail: "of \(shortGB(monitor.stats.memoryTotal)) GB",
+                    fraction: monitor.stats.memoryPressure,
+                    tint: loadTint(monitor.stats.memoryPressure, warn: 0.7, crit: 0.9)
+                )
+                metricTile(
+                    title: "Disk",
+                    value: shortGB(monitor.stats.diskUsed),
+                    unit: "GB",
+                    detail: "of \(shortGB(monitor.stats.diskTotal)) GB",
+                    fraction: monitor.stats.diskFraction,
+                    tint: loadTint(monitor.stats.diskFraction, warn: 0.85, crit: 0.95)
+                )
+                metricTile(
+                    title: "GPU",
+                    value: "\(pct(monitor.stats.gpuUsage))",
+                    unit: "%",
+                    detail: thermalDetail,
+                    fraction: monitor.stats.gpuUsage,
+                    tint: loadTint(monitor.stats.gpuUsage, warn: 0.55, crit: 0.85)
+                )
             }
         }
+        .padding(.horizontal, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
-    // MARK: CPU gauge
+    // MARK: Tile
 
-    private var cpuGauge: some View {
-        let p = monitor.stats.pCoreAvg
-        let e = monitor.stats.eCoreAvg
-        let combined = (p + e) / 2
-        let pct = Int(combined * 100)
-        let color = cpuColor(combined)
+    private func metricTile(
+        title: String,
+        value: String,
+        unit: String,
+        detail: String,
+        fraction: Double,
+        tint: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.45))
 
-        return GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height - 16)
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle()
-                        .stroke(.white.opacity(0.07), lineWidth: 5)
-                    Circle()
-                        .trim(from: 0, to: combined)
-                        .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
+            Spacer(minLength: 6)
 
-                    VStack(spacing: 1) {
-                        HStack(spacing: 4) {
-                            Text("\(Int(p * 100))")
-                                .font(.system(size: size * 0.17, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(pCoreColor(p))
-                            Image(systemName: "circle.fill")
-                                .font(.system(size: 4))
-                                .foregroundStyle(.white.opacity(0.15))
-                            Text("\(Int(e * 100))")
-                                .font(.system(size: size * 0.17, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(eCoreColor(e))
-                        }
-                        HStack(spacing: 3) {
-                            Text("P")
-                                .font(.system(size: size * 0.09, weight: .semibold))
-                                .foregroundStyle(pCoreColor(p).opacity(0.6))
-                            Text("E")
-                                .font(.system(size: size * 0.09, weight: .semibold))
-                                .foregroundStyle(eCoreColor(e).opacity(0.6))
-                        }
-                    }
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                Text(unit)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(.bottom, 2)
+            }
+
+            Text(detail)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.35))
+                .lineLimit(1)
+                .padding(.top, 2)
+
+            Spacer(minLength: 10)
+
+            // Hairline track — monochrome fill, tint only when elevated
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.08))
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: max(3, geo.size.width * min(1, max(0, fraction))))
                 }
-                .frame(width: size, height: size)
-                .animation(.spring(response: 0.3), value: combined)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.white.opacity(0.04))
-            )
-        }
-        .frame(height: 140)
-    }
-
-    // MARK: Generic gauge
-
-    private func gauge(value: Double, label: String, color: Color) -> some View {
-        let pct = Int(value * 100)
-        return GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height - 16)
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .stroke(.white.opacity(0.07), lineWidth: 5)
-                    Circle()
-                        .trim(from: 0, to: value)
-                        .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    VStack(spacing: 1) {
-                        Text("\(pct)")
-                            .font(.system(size: size * 0.28, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText(value: Double(pct)))
-                        Text(label)
-                            .font(.system(size: size * 0.1, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
-                }
-                .frame(width: size, height: size)
-                .animation(.spring(response: 0.3), value: value)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.white.opacity(0.04))
-            )
-        }
-        .frame(height: 140)
-    }
-
-    // MARK: Battery
-
-    private func batteryRow(level: Double, charging: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: charging ? "bolt.fill" : "battery.100")
-                .font(.system(size: 11))
-                .foregroundStyle(charging ? .yellow : .white.opacity(0.55))
-            Text("\(Int(level * 100))%")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.85))
-            if charging {
-                Text("· Charging")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.yellow.opacity(0.7))
-            }
-            Spacer(minLength: 0)
+            .frame(height: 3)
+            .animation(.easeOut(duration: 0.25), value: fraction)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.white.opacity(0.045))
         )
     }
 
-    // MARK: Colors
+    // MARK: Copy helpers
 
-    private func cpuColor(_ v: Double) -> Color {
-        v < 0.5 ? Color(red: 0.4, green: 0.9, blue: 0.5) : v < 0.8 ? Color(red: 0.95, green: 0.7, blue: 0.2) : Color(red: 0.95, green: 0.3, blue: 0.25)
+    private var cpuDetail: String {
+        let p = pct(monitor.stats.pCoreAvg)
+        let e = pct(monitor.stats.eCoreAvg)
+        if monitor.eCoreCount > 0 {
+            return "P \(p)%  ·  E \(e)%"
+        }
+        return "\(monitor.pCoreCount) cores"
     }
 
-    private func pCoreColor(_ v: Double) -> Color {
-        v < 0.5 ? Color(red: 0.4, green: 0.9, blue: 0.5) : v < 0.8 ? Color(red: 0.95, green: 0.7, blue: 0.2) : Color(red: 0.95, green: 0.3, blue: 0.25)
+    private var thermalDetail: String {
+        switch monitor.stats.thermalState {
+        case .nominal: return "Cool"
+        case .fair: return "Warm"
+        case .serious: return "Hot"
+        case .critical: return "Critical"
+        @unknown default: return "—"
+        }
     }
 
-    private func eCoreColor(_ v: Double) -> Color {
-        v < 0.5 ? Color(red: 0.2, green: 0.7, blue: 0.95) : v < 0.8 ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.95, green: 0.3, blue: 0.5)
+    private func pct(_ v: Double) -> Int { Int((v * 100).rounded()) }
+
+    private func shortGB(_ bytes: Double) -> String {
+        let gb = bytes / 1_073_741_824
+        if gb >= 100 { return String(format: "%.0f", gb) }
+        if gb >= 10 { return String(format: "%.0f", gb) }
+        if gb >= 1 { return String(format: "%.1f", gb) }
+        return String(format: "%.1f", gb)
     }
 
-    private func memColor(_ v: Double) -> Color {
-        v < 0.7 ? Color(red: 0.4, green: 0.9, blue: 0.5) : v < 0.85 ? Color(red: 0.95, green: 0.7, blue: 0.2) : Color(red: 0.95, green: 0.3, blue: 0.25)
-    }
-
-    private func diskColor(_ v: Double) -> Color {
-        v < 0.8 ? Color(red: 0.4, green: 0.9, blue: 0.5) : v < 0.92 ? Color(red: 0.95, green: 0.7, blue: 0.2) : Color(red: 0.95, green: 0.3, blue: 0.25)
+    /// Rest state is soft white; warn/crit only when the number actually matters.
+    private func loadTint(_ v: Double, warn: Double, crit: Double) -> Color {
+        if v >= crit { return Color(red: 0.95, green: 0.38, blue: 0.32) }
+        if v >= warn { return Color(red: 0.98, green: 0.72, blue: 0.28) }
+        return .white.opacity(0.55)
     }
 }
 
@@ -171,9 +151,9 @@ struct SystemLoadBadge: View {
     let registry: ModuleRegistry
 
     var body: some View {
-        let avg = (monitor.stats.cpuUsage + monitor.stats.memoryFraction) / 2
-        let pct = Int(avg * 100)
-        let color: Color = avg > 0.8 ? .red : avg > 0.5 ? .yellow : .green
+        let load = max(monitor.stats.cpuUsage, monitor.stats.memoryPressure)
+        let pct = Int((load * 100).rounded())
+        let color: Color = load > 0.8 ? .red : load > 0.5 ? .yellow : .green
 
         Button {
             registry.select("system")
@@ -184,7 +164,7 @@ struct SystemLoadBadge: View {
                 Text("\(pct)%")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .contentTransition(.numericText(value: avg))
+                    .contentTransition(.numericText(value: load))
             }
             .foregroundStyle(color)
             .padding(.horizontal, 9)
