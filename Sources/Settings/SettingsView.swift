@@ -441,7 +441,7 @@ private struct SystemMonitorPane: View {
                     }
                 }
             } footer: {
-                Text("When load is above the threshold and nothing else is active (timer, calendar, music), the idle notch shows a compact CPU readout.")
+                Text("When load is above the threshold and nothing else is active (timer, calendar, music), the idle notch shows a compact readout. Uses CPU and/or memory stress (compressor/swap) — not disk free space. Disk is capacity-only in the System tab.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

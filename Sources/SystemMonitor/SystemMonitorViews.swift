@@ -29,9 +29,9 @@ struct SystemMonitorTab: View {
                         title: "Memory",
                         value: shortGB(monitor.stats.memoryUsed),
                         unit: "GB",
-                        detail: "of \(shortGB(monitor.stats.memoryTotal)) GB",
+                        detail: memoryDetail,
                         fraction: monitor.stats.memoryPressure,
-                        tint: loadTint(monitor.stats.memoryPressure, warn: 0.7, crit: 0.9)
+                        tint: loadTint(monitor.stats.memoryStress, warn: 0.35, crit: 0.6)
                     )
                 }
                 if showDisk {
@@ -171,6 +171,15 @@ struct SystemMonitorTab: View {
             return "P \(p)%  ·  E \(e)%"
         }
         return "\(monitor.pCoreCount) cores"
+    }
+
+    private var memoryDetail: String {
+        let s = monitor.stats
+        var parts = ["of \(shortGB(s.memoryTotal)) GB"]
+        if s.swapUsed > 1_000_000 {
+            parts.append("swap \(shortGB(s.swapUsed))")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var thermalDetail: String {

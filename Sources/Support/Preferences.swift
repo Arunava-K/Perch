@@ -107,10 +107,11 @@ extension Defaults.Keys {
     static let systemMonitorCollapsedActivity = Key<Bool>("systemMonitorCollapsedActivity", default: true)
 
     /// Load fraction (0…1) at which the collapsed flank appears.
-    static let systemMonitorCollapsedThreshold = Key<Double>("systemMonitorCollapsedThreshold", default: 0.5)
+    static let systemMonitorCollapsedThreshold = Key<Double>("systemMonitorCollapsedThreshold", default: 0.65)
 
-    /// Which metric feeds the ear badge and collapsed flank.
-    static let systemMonitorBadgeMetric = Key<SystemLoadBadgeMetric>("systemMonitorBadgeMetric", default: .max)
+    /// Which metric feeds the ear badge and collapsed flank. CPU-only by default —
+    /// raw “memory used” is almost always high on macOS and is not live load.
+    static let systemMonitorBadgeMetric = Key<SystemLoadBadgeMetric>("systemMonitorBadgeMetric", default: .cpu)
 
     static let systemMonitorShowCPU = Key<Bool>("systemMonitorShowCPU", default: true)
     static let systemMonitorShowMemory = Key<Bool>("systemMonitorShowMemory", default: true)

@@ -24,18 +24,29 @@ struct SystemStats: Equatable {
     var gpuUsage: Double
 
     var memoryFraction: Double { memoryTotal > 0 ? memoryUsed / memoryTotal : 0 }
+    /// Fraction of RAM in wired+active+compressed (looks “full” on macOS even when healthy).
     var memoryPressure: Double {
         memoryTotal > 0 ? (memoryWired + memoryActive + memoryCompressed) / memoryTotal : 0
+    }
+    /// True memory *stress* for badges/idle — compressor + swap, not “RAM in use”.
+    /// macOS fills free RAM with cache; raw pressure stays high and is a bad load signal.
+    var memoryStress: Double {
+        guard memoryTotal > 0 else { return 0 }
+        let compressed = min(1, memoryCompressed / memoryTotal)
+        let swap = min(1, swapUsed / memoryTotal)
+        // Only treat near-full wired/active/compressed as mild stress.
+        let headroom = memoryPressure > 0.9 ? (memoryPressure - 0.9) / 0.1 : 0
+        return min(1, max(compressed * 1.5, swap * 2, headroom * 0.4))
     }
     var diskFraction: Double { diskTotal > 0 ? diskUsed / diskTotal : 0 }
     var swapFraction: Double { swapTotal > 0 ? swapUsed / swapTotal : 0 }
 
-    /// Badge / collapsed load metric.
+    /// Badge / collapsed load metric. Never includes disk (capacity ≠ live load).
     func load(for mode: SystemLoadBadgeMetric) -> Double {
         switch mode {
-        case .max: return max(cpuUsage, memoryPressure)
+        case .max: return max(cpuUsage, memoryStress)
         case .cpu: return cpuUsage
-        case .memory: return memoryPressure
+        case .memory: return memoryStress
         }
     }
 }
@@ -52,9 +63,9 @@ enum SystemLoadBadgeMetric: String, Defaults.Serializable, CaseIterable, Identif
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .max: return "Max of CPU & Memory"
+        case .max: return "Max of CPU & memory stress"
         case .cpu: return "CPU"
-        case .memory: return "Memory pressure"
+        case .memory: return "Memory stress (compressor / swap)"
         }
     }
 }
