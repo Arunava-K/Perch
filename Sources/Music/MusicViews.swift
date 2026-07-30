@@ -49,11 +49,19 @@ struct CollapsedMediaView: View {
 
     @ViewBuilder
     private var artwork: some View {
-        if let art = music.artwork {
-            Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
-        } else {
-            ZStack { Color.white.opacity(0.15); Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.white) }
+        ZStack {
+            if let art = music.artwork {
+                Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
+                    .transition(.opacity)
+            } else {
+                ZStack {
+                    Color.white.opacity(0.15)
+                    Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.white)
+                }
+                .transition(.opacity)
+            }
         }
+        .animation(Motion.crossfade, value: music.title)
     }
 }
 

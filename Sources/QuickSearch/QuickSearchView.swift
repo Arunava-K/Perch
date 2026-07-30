@@ -242,14 +242,20 @@ struct QuickSearchView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        switch selectedEntry {
-        case .clip(let item):
-            clipDetail(item)
-        case .command(let cmd):
-            commandDetail(cmd)
-        case nil:
-            Color.clear
+        Group {
+            switch selectedEntry {
+            case .clip(let item):
+                clipDetail(item)
+                    .id(item.id)
+            case .command(let cmd):
+                commandDetail(cmd)
+                    .id(cmd.id)
+            case nil:
+                Color.clear
+            }
         }
+        .animation(Motion.selection, value: selectedEntry?.id)
+        .transition(.softFade)
     }
 
     private func clipDetail(_ item: ClipItem) -> some View {
@@ -561,6 +567,7 @@ private struct PaletteRow: View {
         .padding(.vertical, 9)
         .background(selected ? Color.accentColor : .clear,
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .animation(Motion.selection, value: selected)
     }
 
     @ViewBuilder

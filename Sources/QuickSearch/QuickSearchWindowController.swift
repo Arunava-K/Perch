@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import QuartzCore
 
 /// A key-capable borderless panel for the quick-search palette. Remembers the
 /// app that was frontmost so a pick can be pasted back into it.
@@ -53,12 +54,37 @@ final class QuickSearchWindowController {
         panel?.contentView = NSHostingView(rootView: root)
 
         positionCenter()
+        guard let panel else { return }
+        panel.alphaValue = 0
+        // Slight lift so the open reads as emerging, not popping in.
+        var frame = panel.frame
+        frame.origin.y -= 8
+        panel.setFrame(frame, display: false)
         NSApp.activate(ignoringOtherApps: true)
-        panel?.makeKeyAndOrderFront(nil)
+        panel.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+            var open = panel.frame
+            open.origin.y += 8
+            panel.animator().setFrame(open, display: true)
+        }
     }
 
     func close() {
-        panel?.orderOut(nil)
+        guard let panel, panel.isVisible else { return }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.12
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+            var frame = panel.frame
+            frame.origin.y -= 6
+            panel.animator().setFrame(frame, display: true)
+        }, completionHandler: {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+        })
     }
 
     private func paste(_ item: ClipItem, forcePlain: Bool) {

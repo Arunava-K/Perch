@@ -34,6 +34,7 @@ struct LibraryItemCell: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(isSelected ? Color.accentColor : Color.black.opacity(0.12),
                               lineWidth: isSelected ? 2.5 : 1)
+                .animation(Motion.selection, value: isSelected)
         )
         .overlay(alignment: .topTrailing) {
             if item.isPinned {

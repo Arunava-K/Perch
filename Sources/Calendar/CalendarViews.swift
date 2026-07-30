@@ -97,7 +97,7 @@ struct CalendarTab: View {
                     VStack(alignment: .leading, spacing: 6) {
                         if !calendar.dayEvents.isEmpty {
                             sectionLabel("Events")
-                            ForEach(Array(calendar.dayEvents.enumerated()), id: \.element.id) { idx, event in
+                            ForEach(calendar.dayEvents) { event in
                                 Button {
                                     calendar.openInCalendar(event)
                                     dismiss()
@@ -105,7 +105,7 @@ struct CalendarTab: View {
                                     agendaRow(event)
                                 }
                                 .buttonStyle(PressableStyle())
-                                .staggeredAppear(idx)
+                                .transition(.softFade)
                             }
                         }
 
@@ -117,7 +117,7 @@ struct CalendarTab: View {
                                     .padding(.vertical, 4)
                             }
                             sectionLabel("Reminders")
-                            ForEach(Array(reminders.reminders.enumerated()), id: \.element.id) { idx, item in
+                            ForEach(reminders.reminders) { item in
                                 Button {
                                     reminders.openRemindersApp()
                                     dismiss()
@@ -125,10 +125,11 @@ struct CalendarTab: View {
                                     reminderRow(item)
                                 }
                                 .buttonStyle(PressableStyle())
-                                .staggeredAppear(calendar.dayEvents.count + idx)
+                                .transition(.softFade)
                             }
                         }
                     }
+                    .animation(Motion.content, value: selectedDate)
                 }
             }
         }
@@ -357,7 +358,9 @@ private struct MonthGrid: View {
         let isSelected = cal.isDate(day, inSameDayAs: selectedDate)
         let marked = hasEvents(day)
         return AnyView(Button {
-            selectedDate = day
+            withAnimation(Motion.snappy) {
+                selectedDate = day
+            }
             if Defaults[.hapticFeedback] { Haptics.tap() }
         } label: {
             VStack(spacing: 2) {
@@ -369,6 +372,7 @@ private struct MonthGrid: View {
                         Circle().fill(isToday ? Color.accentColor
                                       : (isSelected ? Color.white.opacity(0.15) : .clear))
                     )
+                    .animation(Motion.snappy, value: isSelected)
                 Circle()
                     .fill(marked ? Color.white.opacity(0.55) : .clear)
                     .frame(width: 3, height: 3)

@@ -112,7 +112,7 @@ struct SystemMonitorTab: View {
                 }
             }
             .frame(height: 3)
-            .animation(.easeOut(duration: 0.25), value: fraction)
+            .animation(Motion.metric, value: fraction)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
@@ -121,6 +121,7 @@ struct SystemMonitorTab: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.white.opacity(0.045))
         )
+        .animation(Motion.metric, value: value)
     }
 
     // MARK: Top processes
@@ -247,7 +248,9 @@ struct SystemLoadBadge: View {
         let color: Color = load > 0.8 ? .red : load > 0.5 ? .yellow : .green
 
         Button {
-            registry.select("system")
+            withAnimation(Motion.snappy) {
+                registry.select("system")
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "cpu")

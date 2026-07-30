@@ -6,61 +6,75 @@ struct NowPlayingDetailView: View {
     @ObservedObject var music: MusicManager
 
     var body: some View {
-        if music.hasActivePlayer {
-            GeometryReader { geo in
-                let side = geo.size.height
-                HStack(spacing: 18) {
-                    artwork
-                        .frame(width: side, height: side)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        Group {
+            if music.hasActivePlayer {
+                GeometryReader { geo in
+                    let side = geo.size.height
+                    HStack(spacing: 18) {
+                        artwork
+                            .frame(width: side, height: side)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 11) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            MarqueeText(text: music.title.isEmpty ? "Not Playing" : music.title,
-                                        fontSize: 15, weight: .semibold, color: .white)
-                            MarqueeText(text: music.artist,
-                                        fontSize: 12.5, weight: .regular, color: .white.opacity(0.55))
+                        VStack(alignment: .leading, spacing: 11) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                MarqueeText(text: music.title.isEmpty ? "Not Playing" : music.title,
+                                            fontSize: 15, weight: .semibold, color: .white)
+                                MarqueeText(text: music.artist,
+                                            fontSize: 12.5, weight: .regular, color: .white.opacity(0.55))
+                            }
+                            progress
                         }
-                        progress
-                    }
 
-                    Spacer(minLength: 14)
+                        Spacer(minLength: 14)
 
-                    HStack(spacing: 22) {
-                        control("backward.fill", 15) { music.previousTrack() }
-                        control(music.isPlaying ? "pause.fill" : "play.fill", 18, prominent: true) {
-                            music.togglePlayPause()
+                        HStack(spacing: 22) {
+                            control("backward.fill", 15) { music.previousTrack() }
+                            control(music.isPlaying ? "pause.fill" : "play.fill", 18, prominent: true) {
+                                music.togglePlayPause()
+                            }
+                            control("forward.fill", 15) { music.nextTrack() }
                         }
-                        control("forward.fill", 15) { music.nextTrack() }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 6)
+                .transition(.tabContent)
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundStyle(.white.opacity(0.3))
+                    Text("Nothing playing")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.tabContent)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 6)
-        } else {
-            VStack(spacing: 8) {
-                Image(systemName: "music.note")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(.white.opacity(0.3))
-                Text("Nothing playing")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .animation(Motion.content, value: music.hasActivePlayer)
     }
 
     @ViewBuilder
     private var artwork: some View {
-        if let art = music.artwork {
-            Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
-        } else {
-            ZStack {
-                Color.white.opacity(0.1)
-                Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white)
+        ZStack {
+            if let art = music.artwork {
+                Image(nsImage: art)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .id(ObjectIdentifier(art))
+                    .transition(.opacity)
+            } else {
+                ZStack {
+                    Color.white.opacity(0.1)
+                    Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white)
+                }
+                .transition(.opacity)
             }
         }
+        .animation(Motion.crossfade, value: music.artwork != nil)
+        .animation(Motion.crossfade, value: music.title)
     }
 
     private var progress: some View {
@@ -70,17 +84,20 @@ struct NowPlayingDetailView: View {
                     Capsule().fill(.white.opacity(0.16))
                     Capsule().fill(.white.opacity(0.9))
                         .frame(width: max(0, geo.size.width * fraction))
+                        .animation(Motion.metric, value: fraction)
                 }
             }
             .frame(height: 3)
 
             HStack {
                 Text(timeString(music.elapsed))
+                    .contentTransition(.numericText(value: music.elapsed))
                 Spacer()
                 Text(timeString(music.duration))
             }
             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
             .foregroundStyle(.white.opacity(0.45))
+            .animation(Motion.metric, value: music.elapsed)
         }
     }
 
@@ -103,6 +120,7 @@ struct NowPlayingDetailView: View {
                 Image(systemName: symbol)
                     .font(.system(size: size, weight: .semibold))
                     .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
             }
             .frame(width: 38, height: 38)
             .contentShape(Rectangle())

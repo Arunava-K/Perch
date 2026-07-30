@@ -48,7 +48,9 @@ struct NotchRootView: View {
         )
         .ignoresSafeArea()
         .onChange(of: registry.selectedID) { _, _ in
-            model.showWebcam = false      // picking a tab leaves the mirror
+            withAnimation(Motion.content) {
+                model.showWebcam = false      // picking a tab leaves the mirror
+            }
             model.setExpandedHeight(targetHeight)
         }
         .onChange(of: model.showWebcam) { _, _ in
@@ -69,7 +71,7 @@ struct NotchRootView: View {
     /// Camera toggle in the top-right "ear", mirroring the tab bar on the left.
     private var webcamButton: some View {
         Button {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            withAnimation(Motion.content) {
                 model.showWebcam.toggle()
             }
         } label: {
@@ -141,10 +143,14 @@ struct NotchRootView: View {
                 Group {
                     if model.showWebcam {
                         WebcamView(camera: camera)
+                            .transition(.tabContent)
                     } else {
                         tabContent
+                            .transition(.tabContent)
                     }
                 }
+                .animation(Motion.content, value: model.showWebcam)
+                .animation(Motion.content, value: registry.selectedID)
                 .padding(.top, max(10, model.metrics.notchSize.height - 29))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
@@ -175,25 +181,21 @@ struct NotchRootView: View {
                 // Pop from the top so the peek reads as emerging from the notch.
                 .transition(.scale(scale: 0.86, anchor: .top).combined(with: .opacity))
         } else if model.isTimerActive {
-            // Idle: countdown ring + remaining time flanking the camera.
             CollapsedTimerView(timer: timer)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity)
+                .transition(.idleFlank)
         } else if model.isCalendarActive {
-            // Idle: calendar dot + meeting countdown flanking the camera.
             CollapsedCalendarView(calendar: calendar)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity)
+                .transition(.idleFlank)
         } else if model.isMediaActive {
-            // Idle: album art + equalizer flanking the camera (no top padding —
-            // this occupies the notch-height region itself).
             CollapsedMediaView(music: music)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity)
+                .transition(.idleFlank)
         } else if model.isSystemLoadActive {
             CollapsedSystemLoadView(monitor: systemMonitor)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity)
+                .transition(.idleFlank)
         }
     }
 
@@ -201,6 +203,7 @@ struct NotchRootView: View {
     private var tabContent: some View {
         if let module = registry.selected {
             module.makeContent(ModuleContext(dismiss: { model.dismiss() }))
+                .id(module.id)
         }
     }
 

@@ -23,7 +23,7 @@ struct NotchTabBar: View {
     private func tabButton(_ module: any NotchModule) -> some View {
         let isSelected = selectedID == module.id
         return Button {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            withAnimation(Motion.snappy) {
                 selectedID = module.id
             }
         } label: {

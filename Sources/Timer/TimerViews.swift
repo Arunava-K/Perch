@@ -40,6 +40,8 @@ struct CollapsedTimerView: View {
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .animation(Motion.metric, value: timer.remainingString)
                 .opacity(timer.isPaused ? 0.55 : 1)
                 .padding(.trailing, 16)
         }
@@ -192,6 +194,8 @@ struct TimerTab: View {
                         .font(.system(size: 31, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(.white)
+                        .contentTransition(.numericText())
+                        .animation(Motion.metric, value: timer.remainingString)
                     Text(phaseTagline)
                         .font(.system(size: 9.5, weight: .bold))
                         .tracking(0.6)

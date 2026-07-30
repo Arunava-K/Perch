@@ -267,7 +267,12 @@ final class NotchViewModel: ObservableObject {
         if activityQueue.isEmpty {
             currentActivity = nil
             withAnimation(closeAnimation) { isPeeking = false }
-            peekContent = nil
+            // Keep content until the close spring finishes so it doesn’t flash empty.
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(280))
+                guard let self, !self.isPeeking else { return }
+                self.peekContent = nil
+            }
         } else {
             present(activityQueue.removeFirst())
         }
@@ -278,7 +283,9 @@ final class NotchViewModel: ObservableObject {
         peekTask = nil
         activityQueue.removeAll()
         currentActivity = nil
-        if isPeeking { isPeeking = false }
+        if isPeeking {
+            withAnimation(closeAnimation) { isPeeking = false }
+        }
         peekContent = nil
     }
 
