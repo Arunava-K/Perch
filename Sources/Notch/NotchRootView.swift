@@ -19,6 +19,8 @@ struct NotchRootView: View {
     @ObservedObject var weather: WeatherManager
     /// System monitor (for the ear badge).
     @ObservedObject var systemMonitor: SystemMonitorManager
+    /// Dictation (live waveform flank while recording/transcribing).
+    @ObservedObject var dictation: DictationManager
     /// Opens the Settings window (gear button in the top-right ear).
     let onOpenSettings: () -> Void
 
@@ -173,6 +175,14 @@ struct NotchRootView: View {
                 if targeted { routeDropToModule() }
             }
             .transition(.blurFade)
+        } else if model.isDictationActive {
+            // Live dictation pill — hangs below the camera line like a peek so
+            // the waveform is never hidden by the hardware notch.
+            DictationLiveView(dictation: dictation)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, model.metrics.notchSize.height)
+                .padding(.bottom, 8)
+                .transition(.scale(scale: 0.86, anchor: .top).combined(with: .opacity))
         } else if model.isPeeking, let peek = model.peekContent {
             peekView(peek)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

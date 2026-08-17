@@ -54,7 +54,15 @@ enum PasteService {
         items.lazy.filter { $0.plainTextBody != nil }.count >= 2
     }
 
-    private static func pasteText(_ string: String) -> Outcome {
+    /// Paste plain text at the cursor in the frontmost app (dictation output).
+    /// Same trusted-⌘V path as clip pasting; copy-only fallback if the user
+    /// hasn't granted Accessibility.
+    @discardableResult
+    static func pastePlainText(_ string: String) -> Outcome {
+        pasteText(string)
+    }
+
+    static func pasteText(_ string: String) -> Outcome {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(string, forType: .string)

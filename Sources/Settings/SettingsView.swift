@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 import UniformTypeIdentifiers
 import Defaults
 import KeyboardShortcuts
@@ -10,6 +11,8 @@ struct SettingsView: View {
     @ObservedObject var registry: ModuleRegistry
     @ObservedObject var calendar: CalendarManager
     @ObservedObject var reminders: ReminderManager
+    @ObservedObject var dictation: DictationManager
+    @ObservedObject var models: DictationModelStore
 
     var body: some View {
         TabView {
@@ -24,6 +27,9 @@ struct SettingsView: View {
             }
             Tab("Calendar", systemImage: "calendar") {
                 CalendarPane(calendar: calendar, reminders: reminders)
+            }
+            Tab("Dictation", systemImage: "waveform") {
+                DictationPane(dictation: dictation, models: models)
             }
             Tab("System", systemImage: "cpu") {
                 SystemMonitorPane()
@@ -408,6 +414,190 @@ private struct CalendarPane: View {
     }
 }
 
+// MARK: - Dictation
+
+private struct DictationPane: View {
+    @ObservedObject var dictation: DictationManager
+    @ObservedObject var models: DictationModelStore
+
+    @Default(.dictationEnabled) private var enabled
+    @Default(.dictationModelID) private var modelID
+    @Default(.dictationLanguage) private var language
+    @Default(.dictationSoundFeedback) private var soundFeedback
+
+    @State private var micGranted = AVAudioApplication.shared.recordPermission == .granted
+
+    /// Whisper language menu (code → label).
+    private static let languages: [(code: String, label: String)] = [
+        ("auto", "Auto-detect"), ("en", "English"), ("de", "German"), ("fr", "French"),
+        ("es", "Spanish"), ("it", "Italian"), ("pt", "Portuguese"), ("nl", "Dutch"),
+        ("pl", "Polish"), ("ru", "Russian"), ("uk", "Ukrainian"), ("tr", "Turkish"),
+        ("ar", "Arabic"), ("hi", "Hindi"), ("ja", "Japanese"), ("ko", "Korean"),
+        ("zh", "Chinese"), ("vi", "Vietnamese"), ("sv", "Swedish"),
+    ]
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable dictation", isOn: $enabled)
+                KeyboardShortcuts.Recorder("Start / stop", name: .toggleDictation)
+                Toggle("Play sounds", isOn: $soundFeedback)
+            } header: {
+                Text("Dictation")
+            } footer: {
+                Text("Press the shortcut, speak, then press it again — the transcript is typed wherever your cursor is. Speech is transcribed entirely on your Mac; clicking the waveform in the notch discards the take.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
+                    Label("Microphone", systemImage: micGranted
+                          ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(micGranted ? .green : .orange)
+                    Spacer()
+                    if micGranted {
+                        Text("Granted").foregroundStyle(.secondary)
+                    } else {
+                        Button("Allow…") {
+                            AVAudioApplication.requestRecordPermission { _ in
+                                Task { @MainActor in
+                                    micGranted = AVAudioApplication.shared.recordPermission == .granted
+                                }
+                            }
+                        }
+                    }
+                }
+                if !micGranted {
+                    Button("Open Privacy Settings…") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            } header: {
+                Text("Permissions")
+            } footer: {
+                Text("Dictation needs microphone access. Transcripts are pasted via ⌘V, so Accessibility (Clipboard pane) is needed for auto-paste.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                ForEach(DictationModelStore.catalog) { info in
+                    modelRow(info)
+                }
+            } header: {
+                Text("Speech model")
+            } footer: {
+                Text("Models download once from the whisper.cpp project and stay on your Mac. Bigger models are slower but more accurate; “Turbo” needs a Mac with ample memory.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Picker("Language", selection: $language) {
+                    ForEach(Self.languages, id: \.code) { entry in
+                        Text(entry.label).tag(entry.code)
+                    }
+                }
+                .disabled(isEnglishOnlyModel)
+            } header: {
+                Text("Language")
+            } footer: {
+                Text(footerLanguageText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear {
+            micGranted = AVAudioApplication.shared.recordPermission == .granted
+        }
+    }
+
+    private var isEnglishOnlyModel: Bool {
+        DictationModelStore.info(for: modelID)?.isEnglishOnly ?? false
+    }
+
+    private var footerLanguageText: String {
+        if isEnglishOnlyModel {
+            return "English-only models always transcribe English. Pick a multilingual model (e.g. “Base ML”) to choose a language."
+        }
+        return "Auto-detect lets Whisper detect the spoken language (slightly slower)."
+    }
+
+    // MARK: Model rows
+
+    @ViewBuilder
+    private func modelRow(_ info: DictationModelStore.ModelInfo) -> some View {
+        let isInstalled = models.installed.contains(info.id)
+        let isDownloading = models.downloading.contains(info.id)
+        let isSelected = modelID == info.id
+
+        HStack(spacing: 10) {
+            Image(systemName: "waveform")
+                .frame(width: 18)
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.title)
+                Text("\(info.blurb) · \(ByteCountFormatter.string(fromByteCount: info.sizeBytes, countStyle: .file))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let failure = models.failure[info.id] {
+                    Text(failure)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Spacer()
+
+            if isDownloading {
+                downloadProgress(info)
+            } else if isInstalled {
+                if isSelected {
+                    Text("In use")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button("Use") { modelID = info.id }
+                }
+                if !isSelected {
+                    Button {
+                        models.delete(info.id)
+                    } label: {
+                        Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Button("Download") { models.download(info.id) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func downloadProgress(_ info: DictationModelStore.ModelInfo) -> some View {
+        let fraction = models.progress[info.id] ?? 0
+        HStack(spacing: 8) {
+            ProgressView(value: fraction)
+                .frame(width: 120)
+            Text(fraction > 0 ? "\(Int((fraction * 100).rounded()))%" : "Starting…")
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 64, alignment: .leading)
+            Button {
+                models.cancelDownload(info.id)
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
 // MARK: - System monitor
 
 private struct SystemMonitorPane: View {
@@ -504,6 +694,7 @@ private struct ShortcutsPane: View {
             Section {
                 KeyboardShortcuts.Recorder("Toggle notch", name: .toggleNotch)
                 KeyboardShortcuts.Recorder("Quick search", name: .quickSearch)
+                KeyboardShortcuts.Recorder("Dictation", name: .toggleDictation)
                 LabeledContent("Paste recent") {
                     Text("⌃⌘1 … ⌃⌘0").foregroundStyle(.secondary)
                 }

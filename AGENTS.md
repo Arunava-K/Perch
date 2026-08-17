@@ -46,3 +46,12 @@
 - Collapsed idle flank when load ≥ threshold and timer/calendar/media inactive (`CollapsedSystemLoadView`).
 - Settings → System: collapsed activity, threshold, badge metric, tile visibility.
 - `SystemMonitorModule` sets `hiddenFromTabBar: true`; ear layout: WeatherBadge → webcam → SystemLoadBadge → settings.
+
+## Dictation
+
+- WhisperFlow-style STT, fully local via whisper.cpp. Not a module — `DictationManager` owns the flow; the collapsed-notch flank (`CollapsedDictationView`) has top precedence among idle flanks, and hover-expansion is suppressed while it's active.
+- Engine: vendored prebuilt XCFramework at `Vendor/Whisper/whisper.xcframework` (official whisper.cpp v1.9.2 macOS slice, Metal-accelerated, metallib embedded). Consumed through the local SPM package in `Vendor/Whisper/Package.swift`; bumping = re-trim from a release zip and update the comment.
+- GGML models are downloaded on demand from `huggingface.co/ggerganov/whisper.cpp` into `~/Library/Application Support/Perch/models/` (`DictationModelStore`); nothing model-related is bundled. Files start with the little-endian ggml magic `6c 6d 67 67` — verify with that, not the string "ggml".
+- Audio path: `AVAudioEngine` input tap → `AVAudioConverter` → 16 kHz mono Float32; samples buffered under `NSLock` (audio thread), RMS → published `level` for the waveform. `WhisperTranscriber` caches the whisper context across sessions on a private serial queue.
+- Trigger: `toggleDictation` shortcut (default ⌥Space, rebindable) + Quick Search command. Toggle model: press = record, press = transcribe + paste at cursor via `PasteService.pastePlainText`; click the flank = discard. Transcripts are never stored.
+- Requires microphone permission (`AVAudioApplication`) + Accessibility for auto-paste (copy-only fallback otherwise). Cannot be exercised headlessly; verify manually after building.

@@ -9,17 +9,21 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let registry: ModuleRegistry
     private let calendar: CalendarManager
     private let reminders: ReminderManager
+    private let dictation: DictationManager
+    private let models: DictationModelStore
     private var window: NSWindow?
 
-    init(registry: ModuleRegistry, calendar: CalendarManager, reminders: ReminderManager) {
+    init(registry: ModuleRegistry, calendar: CalendarManager, reminders: ReminderManager, dictation: DictationManager, models: DictationModelStore) {
         self.registry = registry
         self.calendar = calendar
         self.reminders = reminders
+        self.dictation = dictation
+        self.models = models
     }
 
     func show() {
         if window == nil {
-            let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar, reminders: reminders))
+            let hosting = NSHostingController(rootView: SettingsView(registry: registry, calendar: calendar, reminders: reminders, dictation: dictation, models: models))
             let window = NSWindow(contentViewController: hosting)
             window.title = "Perch Settings"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

@@ -8,6 +8,9 @@ extension KeyboardShortcuts.Name {
     /// Open the quick-search palette.
     static let quickSearch = Self("quickSearch", default: .init(.v, modifiers: [.control, .command]))
 
+    /// Toggle voice dictation (record → transcribe → type at the cursor).
+    static let toggleDictation = Self("toggleDictation", default: .init(.space, modifiers: [.option]))
+
     // Paste the Nth most recent clip directly (⌃⌘1 = newest … ⌃⌘0 = 10th).
     static let pasteRecent1 = Self("pasteRecent1", default: .init(.one, modifiers: [.control, .command]))
     static let pasteRecent2 = Self("pasteRecent2", default: .init(.two, modifiers: [.control, .command]))

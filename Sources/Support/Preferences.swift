@@ -88,6 +88,21 @@ extension Defaults.Keys {
     /// Reminder-list ids the user has hidden from the notch (empty = show all).
     static let hiddenReminderListIDs = Key<[String]>("hiddenReminderListIDs", default: [])
 
+    // MARK: Dictation
+
+    /// Voice dictation (whisper.cpp, fully local). On by default; the first
+    /// press guides the user to download a model if none is installed yet.
+    static let dictationEnabled = Key<Bool>("dictationEnabled", default: true)
+
+    /// Which whisper model to use (id from `DictationModelStore.catalog`).
+    static let dictationModelID = Key<String>("dictationModelID", default: "base.en")
+
+    /// Whisper language code, or "auto" for detection (multilingual models).
+    static let dictationLanguage = Key<String>("dictationLanguage", default: "auto")
+
+    /// Play subtle start/stop sounds during dictation.
+    static let dictationSoundFeedback = Key<Bool>("dictationSoundFeedback", default: true)
+
     // MARK: Modules / tabs
 
     /// Module ids in display order (empty = registration order).

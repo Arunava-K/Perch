@@ -6,6 +6,8 @@ options:
     macOS: "15.0"
 
 packages:
+  Whisper:
+    path: Vendor/Whisper
   Defaults:
     url: https://github.com/sindresorhus/Defaults
     exactVersion: "9.0.6"
@@ -67,6 +69,8 @@ targets:
         NSLocationWhenInUseUsageDescription: "Perch uses your location to show the current weather in the notch."
         # Required for the webcam mirror (camera preview in the notch).
         NSCameraUsageDescription: "Perch shows a live mirror from your camera in the notch so you can check yourself before a call."
+        # Required for voice dictation (speech-to-text typed at the cursor).
+        NSMicrophoneUsageDescription: "Perch uses the microphone to transcribe your speech to text when you trigger dictation."
         # Sparkle auto-update is dormant until these are configured.
         # See RELEASING.md if you set up a Developer ID + Sparkle feed.
         SUFeedURL: "https://example.com/perch/appcast.xml"
@@ -75,6 +79,8 @@ targets:
     sources:
       - path: Sources
     dependencies:
+      - package: Whisper
+        product: whisper
       - package: Defaults
       - package: KeyboardShortcuts
       - package: Sparkle

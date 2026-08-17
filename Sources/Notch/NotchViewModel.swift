@@ -28,6 +28,10 @@ final class NotchViewModel: ObservableObject {
     @Published var isCalendarActive = false
     /// True while system load is elevated — compact CPU/mem flank in the idle notch.
     @Published var isSystemLoadActive = false
+    /// True while dictation is recording/transcribing — live waveform flank.
+    /// While active, hover no longer expands the notch (the flank holds, like
+    /// a live activity).
+    @Published var isDictationActive = false
     @Published var metrics: NotchMetrics
     /// Expanded height of the currently-selected tab (modules can differ).
     @Published var expandedHeight: CGFloat = 180
@@ -123,6 +127,12 @@ final class NotchViewModel: ObservableObject {
         CGSize(width: metrics.notchSize.width + 96, height: metrics.notchSize.height)
     }
 
+    /// Dictation live pill — hangs below the camera line like a peek so the
+    /// waveform stays visible beside/under the hardware notch.
+    var dictationPeekSize: CGSize {
+        CGSize(width: max(metrics.notchSize.width + 200, 380), height: metrics.notchSize.height + 46)
+    }
+
     /// The window is always sized to the largest state so content can animate
     /// inside it without resizing the window itself.
     var windowSize: CGSize {
@@ -131,6 +141,7 @@ final class NotchViewModel: ObservableObject {
 
     var currentNotchSize: CGSize {
         if isExpanded { return expandedSize }
+        if isDictationActive { return dictationPeekSize }
         if isPeeking {
             if case .notification = peekContent { return notificationPeekSize }
             return peekSize
@@ -162,7 +173,8 @@ final class NotchViewModel: ObservableObject {
         if hovering {
             collapseTask?.cancel()
             collapseTask = nil
-            guard !awaitingHoverExitAfterManualClose, !isExpanded, Defaults[.openNotchOnHover] else { return }
+            // While dictating, the flank holds the collapsed notch (live activity).
+            guard !awaitingHoverExitAfterManualClose, !isExpanded, !isDictationActive, Defaults[.openNotchOnHover] else { return }
             expand()
         } else {
             awaitingHoverExitAfterManualClose = false

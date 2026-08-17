@@ -17,6 +17,7 @@ final class NotchWindowController {
     private let camera: CameraManager
     private let weather: WeatherManager
     private let systemMonitor: SystemMonitorManager
+    private let dictation: DictationManager
     private var hoverTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -24,7 +25,7 @@ final class NotchWindowController {
     /// controller is created later in app startup).
     var onOpenSettings: (() -> Void)?
 
-    init(registry: ModuleRegistry, music: MusicManager, timer: TimerEngine, calendar: CalendarManager, weather: WeatherManager, systemMonitor: SystemMonitorManager, camera: CameraManager) {
+    init(registry: ModuleRegistry, music: MusicManager, timer: TimerEngine, calendar: CalendarManager, weather: WeatherManager, systemMonitor: SystemMonitorManager, camera: CameraManager, dictation: DictationManager) {
         // The window is fixed to the tallest of any tab or the webcam mirror.
         let tallest = max(NotchViewModel.webcamMaxHeight, registry.allModules.map(\.preferredExpandedHeight).max() ?? 180)
         self.model = NotchViewModel(metrics: .current(), windowExpandedHeight: tallest)
@@ -35,6 +36,7 @@ final class NotchWindowController {
         self.camera = camera
         self.weather = weather
         self.systemMonitor = systemMonitor
+        self.dictation = dictation
         model.expandedHeight = registry.selected?.preferredExpandedHeight ?? 180
     }
 
@@ -46,7 +48,7 @@ final class NotchWindowController {
             model?.interactiveRect ?? .zero
         }
 
-        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer, calendar: calendar, camera: camera, weather: weather, systemMonitor: systemMonitor, onOpenSettings: { [weak self] in self?.onOpenSettings?() }))
+        let hosting = FirstMouseHostingView(rootView: NotchRootView(model: model, registry: registry, music: music, timer: timer, calendar: calendar, camera: camera, weather: weather, systemMonitor: systemMonitor, dictation: dictation, onOpenSettings: { [weak self] in self?.onOpenSettings?() }))
         hosting.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosting)
         panel.contentView = container
@@ -105,6 +107,17 @@ final class NotchWindowController {
         calendar.onReminder = { [weak self] event in
             self?.model.showMessage(symbol: "calendar", text: "\(event.title) · \(event.relativeString())")
         }
+
+        // Dictation flank: waveform while recording, dots while transcribing.
+        dictation.$state
+            .map { $0 != .idle }
+            .removeDuplicates()
+            .sink { [weak self] active in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self?.model.isDictationActive = active
+                }
+            }
+            .store(in: &cancellables)
 
         // Elevated load flank when nothing higher-priority is showing.
         systemMonitor.$stats
