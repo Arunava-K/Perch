@@ -14,7 +14,16 @@ struct DictationLiveView: View {
         HStack(spacing: 12) {
             dot
             if dictation.state == .recording {
-                waveform
+                Group {
+                    if dictation.hasLiveText {
+                        liveText
+                    } else {
+                        waveform
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .animation(.easeOut(duration: 0.25), value: dictation.hasLiveText)
+                .transition(.opacity)
                 elapsedTime
             } else {
                 transcribingLabel
@@ -42,7 +51,31 @@ struct DictationLiveView: View {
         }
     }
 
-    /// Per-bar weights give the bars a wave feel even for a single level value.
+    // MARK: Live text
+
+    /// Finalized words at full brightness; the provisional tail dims — it may
+    /// still be revised. Head-truncated so the most recent words stay visible.
+    private var liveText: some View {
+        Text(liveAttributedString)
+            .font(.system(size: 13, weight: .medium))
+            .lineLimit(1)
+            .truncationMode(.head)
+            .minimumScaleFactor(0.85)
+    }
+
+    private var liveAttributedString: AttributedString {
+        var s = AttributedString()
+        if !dictation.liveFinalText.isEmpty {
+            s.append(AttributedString(dictation.liveFinalText + " "))
+        }
+        let partial = AttributedString(dictation.livePartialText)
+        var container = partial
+        container.foregroundColor = .white.opacity(0.5)
+        s.append(container)
+        return s
+    }
+
+    // MARK: Recording waveform
     private static let barWeights: [CGFloat] = [0.35, 0.6, 0.85, 1.0, 0.8, 0.55, 0.35]
 
     private var waveform: some View {

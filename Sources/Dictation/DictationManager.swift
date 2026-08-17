@@ -19,6 +19,10 @@ final class DictationManager: ObservableObject {
     @Published private(set) var level: Double = 0
     /// When the current take started (drives the elapsed time in the pill).
     @Published private(set) var startedAt: Date?
+    /// Live transcript while recording: finalized words (never revised)…
+    @Published private(set) var liveFinalText: String = ""
+    /// …and the provisional tail (still may change until finalized).
+    @Published private(set) var livePartialText: String = ""
 
     /// Fires with the final transcript (paste target: the frontmost app).
     var onTranscript: ((String) -> Void)?
@@ -28,9 +32,14 @@ final class DictationManager: ObservableObject {
     var onNeedsSetup: (() -> Void)?
 
     var isActive: Bool { state != .idle }
+    var hasLiveText: Bool {
+        !liveFinalText.isEmpty || !livePartialText.isEmpty
+    }
 
     private let engine = AVAudioEngine()
     private let transcriber = WhisperTranscriber()
+    private let stream = DictationStreamEngine()
+    private var streamLoop: Task<Void, Never>?
     /// Audio thread storage — guarded by `sampleLock`, not the main actor.
     private let sampleLock = NSLock()
     private nonisolated(unsafe) var sampleStorage: [Float] = []
@@ -53,6 +62,11 @@ final class DictationManager: ObservableObject {
     func cancel() {
         guard state == .recording else { return }
         stopEngine()
+        streamLoop?.cancel()
+        streamLoop = nil
+        stream.reset()
+        liveFinalText = ""
+        livePartialText = ""
         state = .idle
         level = 0
         startedAt = nil
@@ -99,7 +113,37 @@ final class DictationManager: ObservableObject {
         }
         state = .recording
         startedAt = Date()
+        liveFinalText = ""
+        livePartialText = ""
+        stream.reset()
+        startStreaming()
         playSound("Tink")
+    }
+
+    /// While recording, periodically hand un-finalized audio to the stream
+    /// engine so partial words appear live in the notch pill.
+    private func startStreaming() {
+        let modelPath = DictationModelStore.modelURL(for: Defaults[.dictationModelID]).path
+        let language = Defaults[.dictationLanguage]
+        streamLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(450))
+                guard let self, self.state == .recording, !Task.isCancelled else { return }
+                await self.stream.tickIfReady(
+                    totalSamples: self.totalSampleCount,
+                    read: { [weak self] from, to in self?.copySamples(from: from, to: to) ?? [] },
+                    transcriber: self.transcriber,
+                    modelPath: modelPath,
+                    language: language)
+                guard !Task.isCancelled else { return }
+                self.publishLiveText()
+            }
+        }
+    }
+
+    private func publishLiveText() {
+        if liveFinalText != stream.finalText { liveFinalText = stream.finalText }
+        if livePartialText != stream.partialText { livePartialText = stream.partialText }
     }
 
     // MARK: Engine
@@ -190,16 +234,34 @@ final class DictationManager: ObservableObject {
         return samples
     }
 
+    // MARK: Capture-buffer access (streaming)
+
+    nonisolated private var totalSampleCount: Int {
+        sampleLock.lock()
+        defer { sampleLock.unlock() }
+        return sampleStorage.count
+    }
+
+    nonisolated private func copySamples(from: Int, to: Int) -> [Float] {
+        sampleLock.lock()
+        defer { sampleLock.unlock() }
+        guard from < to, from >= 0, to <= sampleStorage.count else { return [] }
+        return Array(sampleStorage[from..<to])
+    }
+
     // MARK: Stop → transcribe → deliver
 
     private func stopAndTranscribe() {
         stopEngine()
+        streamLoop?.cancel()
+        streamLoop = nil
         let audio = collectSamples()
         level = 0
 
         guard audio.count >= 1_600 else {  // < ~100 ms of speech
             state = .idle
             startedAt = nil
+            publishLiveTextReset()
             return
         }
 
@@ -209,32 +271,61 @@ final class DictationManager: ObservableObject {
         let modelPath = DictationModelStore.modelURL(for: Defaults[.dictationModelID]).path
         let language = Defaults[.dictationLanguage]
         let transcriber = self.transcriber
+        let hadStreamed = stream.hasStreamed
+        let stream = self.stream
 
         Task.detached(priority: .userInitiated) { [weak self] in
             let text: String
             do {
-                text = Self.postProcess(try await transcriber.transcribe(
-                    samples: audio, modelPath: modelPath, language: language))
+                if hadStreamed {
+                    // Streaming already finalized most of the take — only the
+                    // un-finalized tail needs a run (seeded with prior text).
+                    let stitched = try await stream.finalizeTail(
+                        audio: audio, transcriber: transcriber,
+                        modelPath: modelPath, language: language)
+                    text = Self.postProcess(stitched)
+                } else {
+                    text = await Self.postProcess(try await transcriber.transcribe(
+                        samples: audio, modelPath: modelPath, language: language))
+                }
             } catch {
                 await MainActor.run { [weak self] in
-                    self?.state = .idle
-                    self?.startedAt = nil
-                    self?.onEvent?("exclamationmark.triangle", "Transcription failed")
+                    self?.finishTranscription(with: .failure)
                 }
                 return
             }
             let final = text
             await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.state = .idle
-                self.startedAt = nil
-                if final.isEmpty {
-                    self.onEvent?("waveform.slash", "Nothing heard")
-                } else {
-                    self.onTranscript?(final)
-                }
+                self?.finishTranscription(with: .success(final))
             }
         }
+    }
+
+    private enum TranscriptionOutcome {
+        case success(String)
+        case failure
+    }
+
+    private func finishTranscription(with outcome: TranscriptionOutcome) {
+        state = .idle
+        startedAt = nil
+        switch outcome {
+        case .failure:
+            onEvent?("exclamationmark.triangle", "Transcription failed")
+        case .success(let text):
+            if text.isEmpty {
+                onEvent?("waveform.slash", "Nothing heard")
+            } else {
+                onTranscript?(text)
+            }
+        }
+        publishLiveTextReset()
+    }
+
+    private func publishLiveTextReset() {
+        stream.reset()
+        liveFinalText = ""
+        livePartialText = ""
     }
 
     // MARK: Post-processing

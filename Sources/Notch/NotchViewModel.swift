@@ -32,6 +32,8 @@ final class NotchViewModel: ObservableObject {
     /// While active, hover no longer expands the notch (the flank holds, like
     /// a live activity).
     @Published var isDictationActive = false
+    /// True once streaming produced visible text — the pill widens to fit it.
+    @Published var dictationHasText = false
     @Published var metrics: NotchMetrics
     /// Expanded height of the currently-selected tab (modules can differ).
     @Published var expandedHeight: CGFloat = 180
@@ -128,9 +130,13 @@ final class NotchViewModel: ObservableObject {
     }
 
     /// Dictation live pill — hangs below the camera line like a peek so the
-    /// waveform stays visible beside/under the hardware notch.
+    /// waveform stays visible beside/under the hardware notch. Widens once
+    /// streaming text appears (matches the notification peek).
     var dictationPeekSize: CGSize {
-        CGSize(width: max(metrics.notchSize.width + 200, 380), height: metrics.notchSize.height + 46)
+        let width = dictationHasText
+            ? max(metrics.notchSize.width + 340, 520)
+            : max(metrics.notchSize.width + 200, 380)
+        return CGSize(width: width, height: metrics.notchSize.height + 46)
     }
 
     /// The window is always sized to the largest state so content can animate

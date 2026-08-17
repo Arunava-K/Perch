@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var weatherManager: WeatherManager?
     private var systemMonitorManager: SystemMonitorManager?
     private var cameraManager: CameraManager?
+    private var dictationManager: DictationManager?
+    private var dictationModelStore: DictationModelStore?
     private var moduleRegistry: ModuleRegistry?
     private var settingsController: SettingsWindowController?
 
@@ -73,6 +75,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         systemMonitorManager.start()
         self.systemMonitorManager = systemMonitorManager
 
+        // Voice dictation: local whisper.cpp STT, pasted at the cursor.
+        // Models download on demand from Settings; nothing leaves the Mac.
+        let dictationManager = DictationManager()
+        self.dictationManager = dictationManager
+        let dictationModelStore = DictationModelStore()
+        self.dictationModelStore = dictationModelStore
+
         // Register the notch modules (tab order = registration order).
         let registry = ModuleRegistry(modules: [
             ClipboardModule(store: clipStore),
@@ -84,9 +93,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
         self.moduleRegistry = registry
 
-        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, weather: weatherManager, systemMonitor: systemMonitorManager, camera: cameraManager)
+        let notchController = NotchWindowController(registry: registry, music: musicManager, timer: timerEngine, calendar: calendarManager, weather: weatherManager, systemMonitor: systemMonitorManager, camera: cameraManager, dictation: dictationManager)
         notchController.show()
         self.notchController = notchController
+
+        // Dictation output → the frontmost app; announcements → the notch.
+        dictationManager.onTranscript = { text in
+            PasteService.pastePlainText(text)
+        }
+        dictationManager.onEvent = { [weak notchController] symbol, text in
+            notchController?.showMessage(symbol: symbol, text: text)
+        }
 
         // Sneak-peek a freshly captured clip in the collapsed notch.
         clipStore.onCapture = { [weak notchController] item in
@@ -166,8 +183,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Weather auto-starts (passive badge, no opt-in needed).
         weatherManager.start()
 
-        let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager, reminders: reminderManager)
+        let settingsController = SettingsWindowController(registry: registry, calendar: calendarManager, reminders: reminderManager, dictation: dictationManager, models: dictationModelStore)
         self.settingsController = settingsController
+
+        // First dictation press without a model installed → open Settings.
+        dictationManager.onNeedsSetup = { [weak settingsController] in
+            settingsController?.show()
+        }
 
         // The notch's gear button opens Settings (also reachable when the menu
         // bar icon is hidden).
@@ -229,6 +251,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                            keywords: ["timer", "stop", "cancel"]) { [weak timerEngine] in
                 timerEngine?.stop()
             },
+            PaletteCommand(id: "toggle-dictation", title: "Dictate",
+                           subtitle: "Speak; the transcript is typed at the cursor.",
+                           icon: "waveform",
+                           keywords: ["dictate", "dictation", "voice", "speech", "type", "stt", "whisper"]) { [weak dictationManager] in
+                dictationManager?.toggle()
+            },
             PaletteCommand(id: "pause-capture", title: "Pause Clipboard Capture",
                            subtitle: "Stop recording new copies until resumed.",
                            icon: "pause.circle",
@@ -272,6 +300,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Quick-search palette (default ⌃⌘V).
         KeyboardShortcuts.onKeyDown(for: .quickSearch) { [weak quickSearchController] in
             quickSearchController?.toggle()
+        }
+
+        // Voice dictation toggle (default ⌥Space, rebindable in Settings).
+        KeyboardShortcuts.onKeyDown(for: .toggleDictation) { [weak dictationManager] in
+            dictationManager?.toggle()
         }
 
         // Numbered paste: ⌃⌘1 = newest … ⌃⌘0 = 10th most recent.

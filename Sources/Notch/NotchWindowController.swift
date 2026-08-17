@@ -119,6 +119,19 @@ final class NotchWindowController {
             }
             .store(in: &cancellables)
 
+        // Widen the dictation pill once streaming text appears (and collapse
+        // it back when the text clears).
+        dictation.$liveFinalText
+            .combineLatest(dictation.$livePartialText)
+            .map { !$0.isEmpty || !$1.isEmpty }
+            .removeDuplicates()
+            .sink { [weak self] hasText in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self?.model.dictationHasText = hasText
+                }
+            }
+            .store(in: &cancellables)
+
         // Elevated load flank when nothing higher-priority is showing.
         systemMonitor.$stats
             .combineLatest(systemMonitor.$topProcesses.map { _ in () })
